@@ -25,106 +25,114 @@ st.set_page_config(
 # ─── CSS ────────────────────────────────────────────────────
 st.markdown("""
 <style>
-:root {
-    --bg: #f7f7f4;
-    --card: #ffffff;
-    --text: #171717;
-    --muted: #737373;
-    --line: #e7e5e4;
-}
+    /* ใช้ Theme ของ Streamlit เป็นหลัก เพื่อให้เข้ากับ Light / Dark mode */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+        max-width: 980px;
+    }
 
-/* page */
-[data-testid="stAppViewContainer"] { background: var(--bg); }
-[data-testid="stHeader"] { background: transparent !important; }
-[data-testid="stSidebar"] { display: none; }
-.block-container {
-    max-width: 920px;
-    padding-top: 48px;
-    padding-bottom: 64px;
-}
+    h1 {
+        font-size: 2.35rem !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.5px;
+        margin-bottom: 0.25rem;
+    }
 
-/* typography */
-h1, h2, h3, h4, p, label, div, span { color: var(--text); }
-.small-muted { color: var(--muted); font-size: 13px; line-height: 1.7; }
-.page-title {
-    text-align: center;
-    font-size: 30px;
-    font-weight: 700;
-    letter-spacing: -0.6px;
-    margin-bottom: 6px;
-}
-.page-subtitle {
-    text-align: center;
-    color: var(--muted);
-    font-size: 14px;
-    margin-bottom: 28px;
-}
-.section-title {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 10px;
-}
+    div[data-testid="stCaptionContainer"] {
+        color: var(--text-color-secondary, #8c8c8c);
+        font-size: 0.95rem;
+    }
 
-/* cards */
-.center-card {
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    padding: 28px;
-    margin: 0 auto 18px;
-    box-shadow: 0 18px 50px rgba(23, 23, 23, 0.05);
-}
-.login-card {
-    max-width: 420px;
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    padding: 32px;
-    margin: 80px auto 0;
-    box-shadow: 0 18px 50px rgba(23, 23, 23, 0.05);
-}
-.result-badge {
-    display: inline-block;
-    background: #f5f5f4;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 6px 14px;
-    font-size: 13px;
-    color: var(--muted);
-    margin-bottom: 16px;
-}
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 800;
+        font-size: 1.15rem;
+        line-height: 1.4;
+        margin: 18px 0 10px 0;
+        color: inherit !important;
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+    }
 
-/* streamlit widgets */
-.stButton > button, .stDownloadButton > button {
-    border-radius: 12px !important;
-    border: 1px solid #171717 !important;
-    font-weight: 600 !important;
-}
-.stButton > button:hover, .stDownloadButton > button:hover { opacity: .9; }
-[data-testid="stFileUploader"] {
-    border: 1px dashed #d6d3d1;
-    border-radius: 14px;
-    padding: 10px;
-    background: #fafaf9;
-}
-[data-testid="metric-container"] {
-    background: #ffffff;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 14px 16px !important;
-}
-[data-testid="stMetricValue"] { font-size: 1.2rem !important; }
-[data-testid="stDataFrame"] { border: 1px solid var(--line); border-radius: 12px; }
-.stTabs [data-baseweb="tab-list"] { gap: 8px; }
-.stTabs [data-baseweb="tab"] { border-radius: 999px; padding: 8px 14px; }
-.stSuccess, .stError, .stWarning, .stInfo {
-    border-radius: 12px !important;
-    font-size: 13px !important;
-}
-hr { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
+    .section-title .step-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 30px;
+        height: 30px;
+        border-radius: 999px;
+        background: #4c82fb;
+        color: #ffffff;
+        font-size: 0.95rem;
+        font-weight: 800;
+    }
+
+    .section-title .step-text { color: inherit; }
+
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #e8f0fe;
+        color: #1a56db;
+        border-radius: 999px;
+        padding: 7px 18px;
+        font-size: 1.05rem;
+        font-weight: 900;
+        line-height: 1.2;
+        margin-left: 10px;
+        min-width: 68px;
+        min-height: 34px;
+        letter-spacing: 0.2px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .badge {
+            background: rgba(76, 130, 251, 0.18);
+            color: #a9c4ff;
+            border: 1px solid rgba(169, 196, 255, 0.25);
+        }
+    }
+
+    div[data-testid="stRadio"] label {
+        font-size: 1.02rem !important;
+        font-weight: 600 !important;
+        padding: 4px 8px;
+        border-radius: 8px;
+    }
+
+    div[data-testid="stRadio"] div[role="radiogroup"] { gap: 14px; }
+
+    div[data-testid="stFileUploader"] { margin-top: 4px; }
+    div[data-testid="stFileUploader"] section { border-radius: 10px; }
+
+    div[data-testid="stAlert"] { border-radius: 10px; }
+
+    div[data-testid="stButton"] button,
+    div[data-testid="stDownloadButton"] button {
+        border-radius: 10px;
+        font-weight: 750;
+    }
+
+    div[data-testid="metric-container"] {
+        border-radius: 10px;
+        padding: 14px 16px !important;
+    }
+
+    div[data-testid="stDataFrame"] {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .muted-note {
+        color: var(--text-color-secondary, #8c8c8c);
+        font-size: 0.9rem;
+        line-height: 1.6;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -467,25 +475,30 @@ def preprocess_image_variants(pil_img: Image.Image, base_name: str) -> list[tupl
 # 6)  Google Vision OCR
 # ============================================================
 def get_vision_client():
-    """สร้าง Vision client จาก secret ใน .streamlit/secrets.toml"""
+    """สร้าง Vision client จาก Streamlit Secrets แบบ [gcp_service_account]"""
     from google.cloud import vision
     from google.oauth2 import service_account
 
-    key_json_str = st.secrets.get("GOOGLE_VISION_KEY", "")
-    if not key_json_str:
-        st.error("❌ ไม่พบ GOOGLE_VISION_KEY ใน Streamlit Secrets")
+    if "gcp_service_account" not in st.secrets:
+        st.error("ไม่พบ [gcp_service_account] ใน Streamlit Secrets")
+        st.info("ให้วาง APP_PASSWORD และ [gcp_service_account] ใน Settings > Secrets")
         st.stop()
 
     try:
-        info = json.loads(key_json_str)
-    except json.JSONDecodeError as e:
-        st.error(f"❌ GOOGLE_VISION_KEY ไม่ใช่ JSON ที่ถูกต้อง: {e}")
+        info = dict(st.secrets["gcp_service_account"])
+
+        # เผื่อ private_key ถูกวางมาเป็น \n แบบ string ให้แปลงเป็น newline จริง
+        if "private_key" in info and isinstance(info["private_key"], str):
+            info["private_key"] = info["private_key"].replace("\\n", "\n")
+
+        creds = service_account.Credentials.from_service_account_info(
+            info,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"],
+        )
+    except Exception as e:
+        st.error(f"อ่าน [gcp_service_account] ไม่สำเร็จ: {e}")
         st.stop()
 
-    creds = service_account.Credentials.from_service_account_info(
-        info,
-        scopes=["https://www.googleapis.com/auth/cloud-platform"],
-    )
     return vision.ImageAnnotatorClient(credentials=creds)
 
 
@@ -887,97 +900,123 @@ if "uploaded_file_names" not in st.session_state:
 # 13)  LOGIN PAGE
 # ============================================================
 def login_page():
-    st.markdown('<div class="page-title">STM Image Parser</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="page-subtitle">เข้าสู่ระบบเพื่อแปลงรูป Statement เป็นไฟล์ Excel</div>',
-        unsafe_allow_html=True,
-    )
+    st.title("Login")
+    st.caption("กรุณาเข้าสู่ระบบก่อนใช้งาน STM Image Parser")
 
-    st.markdown('<div class="login-card">', unsafe_allow_html=True)
-    password = st.text_input(
-        "รหัสผ่าน",
-        type="password",
-        placeholder="กรอกรหัสผ่าน",
-    )
-    login_clicked = st.button("เข้าสู่ระบบ", use_container_width=True, type="primary")
+    password = st.text_input("Password", type="password", placeholder="กรอกรหัสผ่าน")
 
-    if login_clicked:
+    if st.button("เข้าสู่ระบบ", type="primary", use_container_width=True):
         correct_pw = st.secrets.get("APP_PASSWORD", "stm2025")
         if password == correct_pw:
             st.session_state.authenticated = True
+            st.success("เข้าสู่ระบบสำเร็จ")
             st.rerun()
         else:
             st.error("รหัสผ่านไม่ถูกต้อง")
-    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.stop()
 
 
 # ============================================================
 # 14)  MAIN APP PAGE
 # ============================================================
+def render_section(step_no: str, title: str, badge: str | None = None):
+    badge_html = f'<span class="badge">{badge}</span>' if badge else ""
+    st.markdown(f"""
+<div class="section-title">
+    <span class="step-number">{step_no}</span>
+    <span class="step-text">{title}</span>
+    {badge_html}
+</div>
+""", unsafe_allow_html=True)
+
+
+def format_money_series(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(series, errors="coerce").fillna(0.0)
+
+
 def main_app():
-    st.markdown('<div class="page-title">STM Image Parser</div>', unsafe_allow_html=True)
-    st.markdown(
-        f'<div class="page-subtitle">Google Cloud Vision OCR · ปีที่ใช้ {FORCE_YEAR}</div>',
-        unsafe_allow_html=True,
-    )
+    st.title("STM Image Parser")
+    st.caption(f"Google Cloud Vision OCR · ปีที่ใช้ {FORCE_YEAR}")
+    st.divider()
 
-    # ── Minimal Settings Card ───────────────────────────────
-    st.markdown('<div class="center-card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Settings</div>', unsafe_allow_html=True)
-
+    render_section("1", "เลือกธนาคาร")
     bank_choice = st.radio(
-        "เลือกธนาคาร",
+        "ธนาคาร",
         options=list(BANK_LABELS.keys()),
         format_func=lambda x: BANK_LABELS[x],
         index=0,
         horizontal=True,
+        label_visibility="collapsed",
     )
 
+    st.divider()
+
+    selected_short = "AUTO" if bank_choice == "AUTO" else bank_choice
+    render_section("2", "อัปโหลดภาพ Statement", selected_short)
     uploaded_files = st.file_uploader(
-        "อัปโหลดภาพ Statement",
+        "เลือกไฟล์ภาพ Statement (อัปโหลดได้หลายไฟล์พร้อมกัน)",
         type=["jpg", "jpeg", "png"],
         accept_multiple_files=True,
-        help="รองรับ JPG / PNG และอัปโหลดหลายไฟล์พร้อมกันได้",
+        help="รองรับ JPG / PNG · KBANK / KRUNGSRI / BBL / SCB",
     )
 
-    col_run, col_logout = st.columns([3, 1])
-    with col_run:
-        run_clicked = st.button(
-            "เริ่มประมวลผล",
-            type="primary",
-            use_container_width=True,
-            disabled=not bool(uploaded_files),
+    if not uploaded_files:
+        st.info("อัปโหลดภาพ Statement เพื่อเริ่มใช้งาน")
+        with st.expander("รูปแบบ Secrets ที่ต้องตั้งค่า"):
+            st.code("""APP_PASSWORD = "รหัสที่ต้องการ"
+
+[gcp_service_account]
+type = "service_account"
+project_id = "..."
+private_key_id = "..."
+private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+client_email = "..."
+client_id = "..."
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "...""" , language="toml")
+        if st.button("ออกจากระบบ", use_container_width=True):
+            st.session_state.authenticated = False
+            st.session_state.results = None
+            st.rerun()
+        st.stop()
+
+    st.caption(f"ไฟล์ที่เลือก: {len(uploaded_files)} ไฟล์  •  ธนาคาร: {BANK_LABELS.get(bank_choice, bank_choice)}")
+    st.divider()
+
+    render_section("3", "ประมวลผล")
+    col_btn, col_info = st.columns([2, 3])
+    with col_btn:
+        run_clicked = st.button("เริ่มประมวลผล", type="primary", use_container_width=True)
+    with col_info:
+        st.markdown(
+            '<div class="muted-note">ระบบจะเลือกภาพที่ OCR ชัดที่สุดจากหลายเวอร์ชัน แล้วตรวจ Balance Chain ให้อัตโนมัติ</div>',
+            unsafe_allow_html=True,
         )
+
+    col_clear, col_logout = st.columns([1, 1])
+    with col_clear:
+        if st.button("ล้างผลลัพธ์", use_container_width=True):
+            st.session_state.results = None
+            st.rerun()
     with col_logout:
         if st.button("ออกจากระบบ", use_container_width=True):
             st.session_state.authenticated = False
             st.session_state.results = None
             st.rerun()
 
-    st.markdown(
-        '<div class="small-muted">ตั้งค่า Secrets ใน Streamlit Settings เท่านั้น: '
-        '<code>GOOGLE_VISION_KEY</code> และ <code>APP_PASSWORD</code></div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # ── Run Pipeline ────────────────────────────────────────
-    if run_clicked and uploaded_files:
+    if run_clicked:
         st.session_state.results = None
-        progress_bar = st.progress(0, text="กำลังเริ่มต้น")
+        progress_bar = st.progress(0, text="กำลังเริ่มประมวลผล...")
         status_box = st.empty()
 
         def prog_cb(val):
             progress_bar.progress(val, text=f"{int(val * 100)}%")
 
         def stat_cb(msg):
-            clean_msg = (
-                str(msg)
-                .replace("📡 ", "")
-                .replace("🔍 ", "")
-                .replace("✅ ", "")
-            )
-            status_box.info(clean_msg)
+            status_box.info(str(msg))
 
         try:
             parsed_df, check_df, review_df, active_bank = run_pipeline(
@@ -989,39 +1028,63 @@ def main_app():
                 "review": review_df,
                 "active_bank": active_bank,
             }
-            progress_bar.progress(1.0, text="เสร็จสิ้น")
-            status_box.success(f"ประมวลผลสำเร็จ · {len(parsed_df)} รายการ · ธนาคาร: {active_bank}")
+            progress_bar.progress(1.0, text="ประมวลผลเสร็จสิ้น")
+            status_box.success(f"ประมวลผลสำเร็จ พบ {len(parsed_df):,} รายการ · ธนาคาร: {active_bank}")
         except Exception as e:
             progress_bar.empty()
-            status_box.error(f"Error: {e}")
+            status_box.error(f"อ่านไฟล์ไม่สำเร็จ: {e}")
             st.exception(e)
 
-    # ── Display Results ─────────────────────────────────────
-    if st.session_state.results:
+    if "results" in st.session_state and st.session_state.results:
         res = st.session_state.results
         parsed_df = res["parsed"]
         check_df = res["check"]
         review_df = res["review"]
         active_bank = res["active_bank"]
 
-        st.markdown('<div class="center-card">', unsafe_allow_html=True)
-        st.markdown(f'<span class="result-badge">ตรวจพบ: {active_bank}</span>', unsafe_allow_html=True)
+        st.divider()
+        st.success(f"ประมวลผลสำเร็จ! พบ {len(parsed_df):,} รายการ")
+        st.caption(f"ธนาคารที่ตรวจพบ/เลือกใช้: {active_bank} · Excel จะสร้างชีท parsed_stm · check · summary · ocr_review")
 
-        db_s = pd.to_numeric(parsed_df.get("debit", pd.Series(dtype=float)), errors="coerce")
-        cr_s = pd.to_numeric(parsed_df.get("credit", pd.Series(dtype=float)), errors="coerce")
-        net = cr_s.fillna(0).sum() - db_s.fillna(0).sum()
-        ok_n = check_df["balance_check"].astype(str).str.contains("OK").sum() if not check_df.empty else 0
+        db_s = format_money_series(parsed_df.get("debit", pd.Series(dtype=float)))
+        cr_s = format_money_series(parsed_df.get("credit", pd.Series(dtype=float)))
+        bal_s = pd.to_numeric(parsed_df.get("balance", pd.Series(dtype=float)), errors="coerce")
+        net = cr_s.sum() - db_s.sum()
+        last_bal = float(bal_s.dropna().iloc[-1]) if len(bal_s.dropna()) else 0.0
+        ok_n = int(check_df["balance_check"].astype(str).str.contains("OK").sum()) if not check_df.empty else 0
         rv_n = len(review_df)
 
-        c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("รายการ", f"{len(parsed_df)}")
-        c2.metric("ยอดฝากรวม", f"฿{cr_s.fillna(0).sum():,.2f}")
-        c3.metric("ยอดถอนรวม", f"฿{db_s.fillna(0).sum():,.2f}")
-        c4.metric("ยอดสุทธิ", f"฿{net:,.2f}")
-        c5.metric("ต้องตรวจ", f"{rv_n}")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("จำนวนรายการ", f"{len(parsed_df):,}")
+        c2.metric("ยอดคงเหลือล่าสุด", f"{last_bal:,.2f}")
+        c3.metric("ผ่านตรวจสอบ", f"{ok_n:,}")
+        c4.metric("ต้องตรวจ", f"{rv_n:,}")
 
-        st.markdown("<hr>", unsafe_allow_html=True)
+        c5, c6, c7 = st.columns(3)
+        c5.metric("รวมเดบิต", f"{db_s.sum():,.2f}")
+        c6.metric("รวมเครดิต", f"{cr_s.sum():,.2f}")
+        c7.metric("ยอดสุทธิ", f"{net:,.2f}")
 
+        st.markdown("#### ตัวอย่างรายการ")
+        if parsed_df.empty:
+            st.warning("ไม่พบรายการธุรกรรม")
+        else:
+            preview_df = parsed_df.head(30).copy()
+            for col in ["debit", "credit", "balance"]:
+                if col in preview_df.columns:
+                    preview_df[col] = pd.to_numeric(preview_df[col], errors="coerce")
+            st.dataframe(
+                preview_df.style.format({
+                    "debit": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
+                    "credit": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
+                    "balance": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
+                }),
+                use_container_width=True,
+                height=400,
+            )
+
+        st.divider()
+        st.markdown("#### รายละเอียดผลลัพธ์")
         tab1, tab2, tab3, tab4 = st.tabs(["parsed_stm", "check", "OCR Review", "Export"])
 
         with tab1:
@@ -1036,16 +1099,18 @@ def main_app():
                 def highlight_row(row):
                     check = str(row.get("balance_check", ""))
                     if "REVIEW" in check or ("OK" not in check and check not in ("OPENING_BALANCE", "")):
-                        return ["background-color: rgba(245, 158, 11, 0.08)"] * len(row)
+                        return ["background-color: rgba(245, 158, 11, 0.12)"] * len(row)
                     return [""] * len(row)
 
-                styled = display_df.style.apply(highlight_row, axis=1)
-                styled = styled.format({
-                    "debit": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
-                    "credit": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
-                    "balance": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
-                })
-                st.dataframe(styled, use_container_width=True, height=500)
+                st.dataframe(
+                    display_df.style.apply(highlight_row, axis=1).format({
+                        "debit": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
+                        "credit": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
+                        "balance": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
+                    }),
+                    use_container_width=True,
+                    height=520,
+                )
 
         with tab2:
             if check_df.empty:
@@ -1056,19 +1121,19 @@ def main_app():
                     "prev_balance", "expected_balance", "diff", "balance_check", "raw_line_text",
                 ]
                 show_cols = [c for c in show_cols if c in check_df.columns]
-                st.dataframe(check_df[show_cols], use_container_width=True, height=500)
+                st.dataframe(check_df[show_cols], use_container_width=True, height=520)
 
         with tab3:
             if review_df.empty:
                 st.success("ไม่มีรายการที่ต้องตรวจสอบ")
             else:
-                st.warning(f"พบ {len(review_df)} รายการที่ต้องตรวจสอบ")
+                st.warning(f"พบ {len(review_df):,} รายการที่ต้องตรวจสอบ")
                 show_cols = ["seq", "date", "debit", "credit", "balance", "balance_check", "raw_line_text"]
                 show_cols = [c for c in show_cols if c in review_df.columns]
-                st.dataframe(review_df[show_cols], use_container_width=True, height=400)
+                st.dataframe(review_df[show_cols], use_container_width=True, height=420)
 
         with tab4:
-            st.markdown("#### ดาวน์โหลดผลลัพธ์")
+            st.markdown("##### ดาวน์โหลดผลลัพธ์")
             col_a, col_b, col_c = st.columns(3)
 
             with col_a:
@@ -1117,20 +1182,13 @@ def main_app():
             except Exception as e:
                 st.error(f"สร้าง Excel ไม่ได้: {e}")
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        if st.button("ล้างข้อมูลหลังใช้งาน", use_container_width=True):
+            st.session_state.results = None
+            st.success("ล้างข้อมูล Session แล้ว")
+            st.rerun()
 
-    elif not uploaded_files:
-        st.markdown('<div class="center-card">', unsafe_allow_html=True)
-        st.markdown(
-            '<div style="text-align:center; padding: 24px 10px;">'
-            '<div style="font-size:18px;font-weight:700;margin-bottom:8px;">อัปโหลดภาพ Statement</div>'
-            '<div class="small-muted">รองรับ JPG / PNG · หลายไฟล์พร้อมกัน · KBANK / KRUNGSRI / BBL / SCB</div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
-    else:
-        st.info(f"เลือกไฟล์แล้ว {len(uploaded_files)} ไฟล์ — กดเริ่มประมวลผล")
+    st.divider()
+    st.caption("รองรับ: KBANK · KRUNGSRI · BBL · SCB | ใช้ Secrets: APP_PASSWORD และ [gcp_service_account]")
 
 
 # ============================================================
