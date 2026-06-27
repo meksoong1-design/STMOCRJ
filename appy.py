@@ -18,72 +18,113 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 # ─── Page config ────────────────────────────────────────────
 st.set_page_config(
     page_title="STM Parser",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    layout="centered",
+    initial_sidebar_state="collapsed",
 )
 
 # ─── CSS ────────────────────────────────────────────────────
 st.markdown("""
 <style>
-/* ── Global ── */
-[data-testid="stAppViewContainer"] { background: #0F1117; }
-[data-testid="stSidebar"] { background: #1A1E2A; border-right: 1px solid #2D3347; }
-[data-testid="stSidebar"] * { color: #E8ECF4 !important; }
-
-/* ── Header bar ── */
-.stApp > header { background: transparent !important; }
-
-/* ── Metric cards ── */
-[data-testid="metric-container"] {
-    background: #1A1E2A;
-    border: 1px solid #2D3347;
-    border-radius: 10px;
-    padding: 14px 18px !important;
+:root {
+    --bg: #f7f7f4;
+    --card: #ffffff;
+    --text: #171717;
+    --muted: #737373;
+    --line: #e7e5e4;
 }
-[data-testid="stMetricValue"] { font-size: 1.4rem !important; }
 
-/* ── Dataframe ── */
-[data-testid="stDataFrame"] { border: 1px solid #2D3347; border-radius: 8px; }
+/* page */
+[data-testid="stAppViewContainer"] { background: var(--bg); }
+[data-testid="stHeader"] { background: transparent !important; }
+[data-testid="stSidebar"] { display: none; }
+.block-container {
+    max-width: 920px;
+    padding-top: 48px;
+    padding-bottom: 64px;
+}
 
-/* ── Upload box ── */
+/* typography */
+h1, h2, h3, h4, p, label, div, span { color: var(--text); }
+.small-muted { color: var(--muted); font-size: 13px; line-height: 1.7; }
+.page-title {
+    text-align: center;
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.6px;
+    margin-bottom: 6px;
+}
+.page-subtitle {
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 28px;
+}
+.section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+}
+
+/* cards */
+.center-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 28px;
+    margin: 0 auto 18px;
+    box-shadow: 0 18px 50px rgba(23, 23, 23, 0.05);
+}
+.login-card {
+    max-width: 420px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 32px;
+    margin: 80px auto 0;
+    box-shadow: 0 18px 50px rgba(23, 23, 23, 0.05);
+}
+.result-badge {
+    display: inline-block;
+    background: #f5f5f4;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 16px;
+}
+
+/* streamlit widgets */
+.stButton > button, .stDownloadButton > button {
+    border-radius: 12px !important;
+    border: 1px solid #171717 !important;
+    font-weight: 600 !important;
+}
+.stButton > button:hover, .stDownloadButton > button:hover { opacity: .9; }
 [data-testid="stFileUploader"] {
-    border: 2px dashed #2D3347;
-    border-radius: 10px;
-    padding: 8px;
+    border: 1px dashed #d6d3d1;
+    border-radius: 14px;
+    padding: 10px;
+    background: #fafaf9;
 }
-
-/* ── Buttons ── */
-.stButton > button {
-    border-radius: 8px !important;
-    font-weight: 500 !important;
-    transition: opacity .15s !important;
+[data-testid="metric-container"] {
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 16px !important;
 }
-.stButton > button:hover { opacity: .85 !important; }
-
-/* ── Alert boxes ── */
+[data-testid="stMetricValue"] { font-size: 1.2rem !important; }
+[data-testid="stDataFrame"] { border: 1px solid var(--line); border-radius: 12px; }
+.stTabs [data-baseweb="tab-list"] { gap: 8px; }
+.stTabs [data-baseweb="tab"] { border-radius: 999px; padding: 8px 14px; }
 .stSuccess, .stError, .stWarning, .stInfo {
-    border-radius: 8px !important;
+    border-radius: 12px !important;
     font-size: 13px !important;
 }
-
-/* ── Badge pills ── */
-.badge-ok    { background:#16a34a22; color:#4ade80; border:1px solid #16a34a44; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
-.badge-rev   { background:#f59e0b22; color:#fbbf24; border:1px solid #f59e0b44; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
-.badge-bank  { background:#3b82f622; color:#60a5fa; border:1px solid #3b82f644; padding:4px 14px; border-radius:20px; font-size:13px; font-weight:600; }
-
-/* ── Section title ── */
-.section-title {
-    font-size: 11px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1px; color: #5A6278; margin-bottom: 8px;
-}
-/* ── Login card ── */
-.login-card {
-    max-width: 400px; margin: 80px auto;
-    background: #1A1E2A; border: 1px solid #2D3347;
-    border-radius: 14px; padding: 36px;
-    text-align: center;
-}
+hr { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -136,11 +177,11 @@ NOISE_KEYWORDS = [
 ]
 
 BANK_LABELS = {
-    "AUTO":    "🔍 ตรวจจับอัตโนมัติ",
-    "KBANK":   "🟢 กสิกรไทย (KBANK)",
-    "KRUNGSRI":"🟡 กรุงศรี (Krungsri)",
-    "BBL":     "🔵 กรุงเทพ (BBL)",
-    "SCB":     "🟣 ไทยพาณิชย์ (SCB)",
+    "AUTO":    "ตรวจจับอัตโนมัติ",
+    "KBANK":   "กสิกรไทย (KBANK)",
+    "KRUNGSRI":"กรุงศรี (Krungsri)",
+    "BBL":     "กรุงเทพ (BBL)",
+    "SCB":     "ไทยพาณิชย์ (SCB)",
 }
 
 
@@ -846,248 +887,195 @@ if "uploaded_file_names" not in st.session_state:
 # 13)  LOGIN PAGE
 # ============================================================
 def login_page():
-    st.markdown("""
-    <div style="text-align:center;margin-top:60px;">
-      <div style="font-size:56px;margin-bottom:16px;">🔐</div>
-      <h2 style="margin-bottom:4px;">STM Image Parser</h2>
-      <p style="color:#8B93A8;font-size:14px;margin-bottom:32px;">
-        ป้อนรหัสผ่านเพื่อเข้าใช้งาน
-      </p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="page-title">STM Image Parser</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="page-subtitle">เข้าสู่ระบบเพื่อแปลงรูป Statement เป็นไฟล์ Excel</div>',
+        unsafe_allow_html=True,
+    )
 
-    col_l, col_c, col_r = st.columns([1, 1.2, 1])
-    with col_c:
-        password = st.text_input(
-            "รหัสผ่าน",
-            type="password",
-            placeholder="••••••••",
-            label_visibility="collapsed",
-        )
-        if st.button("🔓  เข้าสู่ระบบ", use_container_width=True, type="primary"):
-            correct_pw = st.secrets.get("APP_PASSWORD", "stm2025")
-            if password == correct_pw:
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("❌ รหัสผ่านไม่ถูกต้อง")
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    password = st.text_input(
+        "รหัสผ่าน",
+        type="password",
+        placeholder="กรอกรหัสผ่าน",
+    )
+    login_clicked = st.button("เข้าสู่ระบบ", use_container_width=True, type="primary")
+
+    if login_clicked:
+        correct_pw = st.secrets.get("APP_PASSWORD", "stm2025")
+        if password == correct_pw:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("รหัสผ่านไม่ถูกต้อง")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ============================================================
 # 14)  MAIN APP PAGE
 # ============================================================
 def main_app():
-    # ── Sidebar ──────────────────────────────────────────────
-    with st.sidebar:
-        st.markdown("""
-        <div style="text-align:center;padding:20px 0 8px;">
-          <div style="font-size:40px;">📊</div>
-          <div style="font-size:18px;font-weight:700;margin-top:6px;">STM Parser</div>
-          <div style="font-size:11px;color:#5A6278;margin-top:4px;">
-            KBANK · KRUNGSRI · BBL · SCB
-          </div>
-        </div>
-        <hr style="border:none;border-top:1px solid #2D3347;margin:12px 0 20px;">
-        """, unsafe_allow_html=True)
+    st.markdown('<div class="page-title">STM Image Parser</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="page-subtitle">Google Cloud Vision OCR · ปีที่ใช้ {FORCE_YEAR}</div>',
+        unsafe_allow_html=True,
+    )
 
-        # ── Year badge ──
-        st.markdown(f"""
-        <div style="background:#1A1E2A;border:1px solid #2D3347;border-radius:8px;
-                    padding:10px 14px;margin-bottom:16px;text-align:center;">
-          <div style="font-size:10px;color:#5A6278;text-transform:uppercase;letter-spacing:1px;">
-            บังคับใช้ปี (FORCE_YEAR)
-          </div>
-          <div style="font-size:22px;font-weight:700;color:#3B82F6;font-family:monospace;">
-            {FORCE_YEAR}
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+    # ── Minimal Settings Card ───────────────────────────────
+    st.markdown('<div class="center-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Settings</div>', unsafe_allow_html=True)
 
-        # ── Bank Selector ──
-        st.markdown('<div class="section-title">เลือกธนาคาร</div>', unsafe_allow_html=True)
-        bank_choice = st.radio(
-            "bank",
-            options=list(BANK_LABELS.keys()),
-            format_func=lambda x: BANK_LABELS[x],
-            index=0,
-            label_visibility="collapsed",
-        )
+    bank_choice = st.radio(
+        "เลือกธนาคาร",
+        options=list(BANK_LABELS.keys()),
+        format_func=lambda x: BANK_LABELS[x],
+        index=0,
+        horizontal=True,
+    )
 
-        st.markdown('<hr style="border:none;border-top:1px solid #2D3347;margin:16px 0;">', unsafe_allow_html=True)
+    uploaded_files = st.file_uploader(
+        "อัปโหลดภาพ Statement",
+        type=["jpg", "jpeg", "png"],
+        accept_multiple_files=True,
+        help="รองรับ JPG / PNG และอัปโหลดหลายไฟล์พร้อมกันได้",
+    )
 
-        # ── Upload ──
-        st.markdown('<div class="section-title">อัปโหลดภาพ Statement</div>', unsafe_allow_html=True)
-        uploaded_files = st.file_uploader(
-            "upload",
-            type=["jpg","jpeg","png"],
-            accept_multiple_files=True,
-            label_visibility="collapsed",
-            help="รองรับ JPG / PNG · หลายไฟล์พร้อมกันได้",
-        )
-
-        # ── Clear uploaded files ──
-        if uploaded_files:
-            for uf in uploaded_files:
-                col1, col2 = st.columns([4, 1])
-                with col1:
-                    st.markdown(f"<div style='font-size:11px;color:#8B93A8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>"
-                                f"📄 {uf.name}</div>", unsafe_allow_html=True)
-                with col2:
-                    pass  # file_uploader มีปุ่ม X ในตัวอยู่แล้ว
-
-        st.markdown('<hr style="border:none;border-top:1px solid #2D3347;margin:16px 0;">', unsafe_allow_html=True)
-
-        # ── Run Button ──
+    col_run, col_logout = st.columns([3, 1])
+    with col_run:
         run_clicked = st.button(
-            "▶  เริ่มประมวลผล",
+            "เริ่มประมวลผล",
             type="primary",
             use_container_width=True,
             disabled=not bool(uploaded_files),
         )
-
-        st.markdown('<hr style="border:none;border-top:1px solid #2D3347;margin:16px 0;">', unsafe_allow_html=True)
-
-        # ── Logout ──
-        if st.button("🚪  ออกจากระบบ", use_container_width=True):
+    with col_logout:
+        if st.button("ออกจากระบบ", use_container_width=True):
             st.session_state.authenticated = False
             st.session_state.results = None
             st.rerun()
 
-        st.markdown(f"""
-        <div style="margin-top:20px;font-size:10px;color:#3B6278;text-align:center;line-height:1.8;">
-          Google Cloud Vision OCR<br>
-          KBANK · KRUNGSRI · BBL · SCB<br>
-          ปีที่ใช้: {FORCE_YEAR}
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="small-muted">ตั้งค่า Secrets ใน Streamlit Settings เท่านั้น: '
+        '<code>GOOGLE_VISION_KEY</code> และ <code>APP_PASSWORD</code></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Main Content ──────────────────────────────────────────
-    st.markdown(f"""
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:28px;">
-      <div style="font-size:36px;">📊</div>
-      <div>
-        <div style="font-size:24px;font-weight:700;letter-spacing:-0.3px;">STM Image Parser</div>
-        <div style="font-size:13px;color:#8B93A8;margin-top:2px;">
-          Google Cloud Vision OCR · ปีบังคับ: <b style="color:#3B82F6;">{FORCE_YEAR}</b>
-        </div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Run Pipeline ──
+    # ── Run Pipeline ────────────────────────────────────────
     if run_clicked and uploaded_files:
         st.session_state.results = None
-        progress_bar = st.progress(0, text="กำลังเริ่มต้น...")
-        status_box   = st.empty()
+        progress_bar = st.progress(0, text="กำลังเริ่มต้น")
+        status_box = st.empty()
 
         def prog_cb(val):
-            progress_bar.progress(val, text=f"{int(val*100)}%")
+            progress_bar.progress(val, text=f"{int(val * 100)}%")
+
         def stat_cb(msg):
-            status_box.info(msg)
+            clean_msg = (
+                str(msg)
+                .replace("📡 ", "")
+                .replace("🔍 ", "")
+                .replace("✅ ", "")
+            )
+            status_box.info(clean_msg)
 
         try:
             parsed_df, check_df, review_df, active_bank = run_pipeline(
                 uploaded_files, bank_choice, prog_cb, stat_cb
             )
             st.session_state.results = {
-                "parsed": parsed_df, "check": check_df,
-                "review": review_df, "active_bank": active_bank,
+                "parsed": parsed_df,
+                "check": check_df,
+                "review": review_df,
+                "active_bank": active_bank,
             }
-            progress_bar.progress(1.0, text="✅ เสร็จสิ้น!")
-            status_box.success(f"✅ ประมวลผลสำเร็จ · {len(parsed_df)} รายการ · ธนาคาร: {active_bank}")
+            progress_bar.progress(1.0, text="เสร็จสิ้น")
+            status_box.success(f"ประมวลผลสำเร็จ · {len(parsed_df)} รายการ · ธนาคาร: {active_bank}")
         except Exception as e:
             progress_bar.empty()
-            status_box.error(f"❌ Error: {e}")
+            status_box.error(f"Error: {e}")
             st.exception(e)
 
-    # ── Display Results ──
+    # ── Display Results ─────────────────────────────────────
     if st.session_state.results:
         res = st.session_state.results
-        parsed_df  = res["parsed"]
-        check_df   = res["check"]
-        review_df  = res["review"]
-        active_bank= res["active_bank"]
+        parsed_df = res["parsed"]
+        check_df = res["check"]
+        review_df = res["review"]
+        active_bank = res["active_bank"]
 
-        # ── Bank badge ──
-        bank_emoji = {"KBANK":"🟢","KRUNGSRI":"🟡","BBL":"🔵","SCB":"🟣","DEFAULT":"🔍"}.get(active_bank,"🔍")
-        st.markdown(f'<span class="badge-bank">{bank_emoji} ตรวจพบ: {active_bank}</span>', unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="center-card">', unsafe_allow_html=True)
+        st.markdown(f'<span class="result-badge">ตรวจพบ: {active_bank}</span>', unsafe_allow_html=True)
 
-        # ── Summary Metrics ──
-        db_s = pd.to_numeric(parsed_df.get("debit",  pd.Series(dtype=float)), errors="coerce")
+        db_s = pd.to_numeric(parsed_df.get("debit", pd.Series(dtype=float)), errors="coerce")
         cr_s = pd.to_numeric(parsed_df.get("credit", pd.Series(dtype=float)), errors="coerce")
-        net  = cr_s.fillna(0).sum() - db_s.fillna(0).sum()
+        net = cr_s.fillna(0).sum() - db_s.fillna(0).sum()
         ok_n = check_df["balance_check"].astype(str).str.contains("OK").sum() if not check_df.empty else 0
         rv_n = len(review_df)
 
-        c1,c2,c3,c4,c5,c6 = st.columns(6)
-        c1.metric("📋 รายการทั้งหมด", f"{len(parsed_df)}")
-        c2.metric("💚 ยอดฝากรวม", f"฿{cr_s.fillna(0).sum():,.2f}")
-        c3.metric("❤️ ยอดถอนรวม",  f"฿{db_s.fillna(0).sum():,.2f}")
-        c4.metric("⚖️ ยอดสุทธิ",   f"฿{net:,.2f}")
-        c5.metric("✅ ผ่านตรวจสอบ", f"{ok_n}")
-        c6.metric("⚠️ ต้องตรวจ",   f"{rv_n}")
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("รายการ", f"{len(parsed_df)}")
+        c2.metric("ยอดฝากรวม", f"฿{cr_s.fillna(0).sum():,.2f}")
+        c3.metric("ยอดถอนรวม", f"฿{db_s.fillna(0).sum():,.2f}")
+        c4.metric("ยอดสุทธิ", f"฿{net:,.2f}")
+        c5.metric("ต้องตรวจ", f"{rv_n}")
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<hr>", unsafe_allow_html=True)
 
-        # ── Tabs ──
-        tab1, tab2, tab3, tab4 = st.tabs(["📋 parsed_stm", "🔍 check", "⚠️ OCR Review", "📥 Export"])
+        tab1, tab2, tab3, tab4 = st.tabs(["parsed_stm", "check", "OCR Review", "Export"])
 
-        # ── Tab 1: parsed_stm ──
         with tab1:
             if parsed_df.empty:
                 st.warning("ไม่พบรายการธุรกรรม")
             else:
                 display_df = parsed_df.copy()
-                # Format numbers
-                for col in ["debit","credit","balance"]:
+                for col in ["debit", "credit", "balance"]:
                     if col in display_df.columns:
                         display_df[col] = pd.to_numeric(display_df[col], errors="coerce")
 
                 def highlight_row(row):
-                    check = str(row.get("balance_check",""))
-                    if "REVIEW" in check or ("OK" not in check and check not in ("OPENING_BALANCE","")):
-                        return ["background-color: rgba(245,158,11,0.08)"]*len(row)
-                    return [""]*len(row)
+                    check = str(row.get("balance_check", ""))
+                    if "REVIEW" in check or ("OK" not in check and check not in ("OPENING_BALANCE", "")):
+                        return ["background-color: rgba(245, 158, 11, 0.08)"] * len(row)
+                    return [""] * len(row)
 
                 styled = display_df.style.apply(highlight_row, axis=1)
                 styled = styled.format({
-                    "debit":   lambda v: f"{v:,.2f}" if pd.notna(v) else "",
-                    "credit":  lambda v: f"{v:,.2f}" if pd.notna(v) else "",
+                    "debit": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
+                    "credit": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
                     "balance": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
                 })
                 st.dataframe(styled, use_container_width=True, height=500)
 
-        # ── Tab 2: check ──
         with tab2:
             if check_df.empty:
                 st.info("ไม่มีข้อมูล")
             else:
-                show_cols = ["seq","date","time","debit","credit","balance",
-                             "prev_balance","expected_balance","diff","balance_check","raw_line_text"]
+                show_cols = [
+                    "seq", "date", "time", "debit", "credit", "balance",
+                    "prev_balance", "expected_balance", "diff", "balance_check", "raw_line_text",
+                ]
                 show_cols = [c for c in show_cols if c in check_df.columns]
                 st.dataframe(check_df[show_cols], use_container_width=True, height=500)
 
-        # ── Tab 3: OCR Review ──
         with tab3:
             if review_df.empty:
-                st.success("✅ ไม่มีรายการที่ต้องตรวจสอบ — ทุกแถวผ่าน Balance Chain")
+                st.success("ไม่มีรายการที่ต้องตรวจสอบ")
             else:
-                st.warning(f"⚠️ พบ {len(review_df)} รายการที่ต้องตรวจสอบ")
-                show_cols = ["seq","date","debit","credit","balance","balance_check","raw_line_text"]
+                st.warning(f"พบ {len(review_df)} รายการที่ต้องตรวจสอบ")
+                show_cols = ["seq", "date", "debit", "credit", "balance", "balance_check", "raw_line_text"]
                 show_cols = [c for c in show_cols if c in review_df.columns]
                 st.dataframe(review_df[show_cols], use_container_width=True, height=400)
 
-        # ── Tab 4: Export ──
         with tab4:
-            st.markdown("#### 📥 ดาวน์โหลดผลลัพธ์")
+            st.markdown("#### ดาวน์โหลดผลลัพธ์")
             col_a, col_b, col_c = st.columns(3)
 
             with col_a:
                 if not parsed_df.empty:
                     csv_parsed = parsed_df.to_csv(index=False, encoding="utf-8-sig")
                     st.download_button(
-                        "📄 parsed_stm.csv",
+                        "parsed_stm.csv",
                         data=csv_parsed.encode("utf-8-sig"),
                         file_name="parsed_stm.csv",
                         mime="text/csv",
@@ -1098,7 +1086,7 @@ def main_app():
                 if not check_df.empty:
                     csv_check = check_df.to_csv(index=False, encoding="utf-8-sig")
                     st.download_button(
-                        "🔍 check.csv",
+                        "check.csv",
                         data=csv_check.encode("utf-8-sig"),
                         file_name="check.csv",
                         mime="text/csv",
@@ -1109,19 +1097,17 @@ def main_app():
                 if not review_df.empty:
                     csv_rev = review_df.to_csv(index=False, encoding="utf-8-sig")
                     st.download_button(
-                        "⚠️ ocr_review.csv",
+                        "ocr_review.csv",
                         data=csv_rev.encode("utf-8-sig"),
                         file_name="ocr_review.csv",
                         mime="text/csv",
                         use_container_width=True,
                     )
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("##### 📊 Excel (พร้อม Conditional Formatting)")
             try:
                 excel_bytes = create_excel(parsed_df, check_df, review_df, active_bank)
                 st.download_button(
-                    "📊 ดาวน์โหลด Excel (stm_result.xlsx)",
+                    "ดาวน์โหลด Excel",
                     data=excel_bytes,
                     file_name="stm_result.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1131,23 +1117,20 @@ def main_app():
             except Exception as e:
                 st.error(f"สร้าง Excel ไม่ได้: {e}")
 
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    elif not uploaded_files:
+        st.markdown('<div class="center-card">', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="text-align:center; padding: 24px 10px;">'
+            '<div style="font-size:18px;font-weight:700;margin-bottom:8px;">อัปโหลดภาพ Statement</div>'
+            '<div class="small-muted">รองรับ JPG / PNG · หลายไฟล์พร้อมกัน · KBANK / KRUNGSRI / BBL / SCB</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
     else:
-        # ── Welcome State ──
-        if not uploaded_files:
-            st.markdown("""
-            <div style="text-align:center;padding:60px 20px;color:#5A6278;">
-              <div style="font-size:56px;margin-bottom:16px;">📤</div>
-              <div style="font-size:16px;font-weight:600;color:#8B93A8;margin-bottom:8px;">
-                อัปโหลดภาพ Statement ทางซ้าย
-              </div>
-              <div style="font-size:13px;">
-                รองรับ JPG / PNG · หลายไฟล์พร้อมกัน<br>
-                KBANK · KRUNGSRI · BBL · SCB
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info(f"📁 เลือกไฟล์แล้ว {len(uploaded_files)} ไฟล์ — กด **▶ เริ่มประมวลผล** ในแถบซ้าย")
+        st.info(f"เลือกไฟล์แล้ว {len(uploaded_files)} ไฟล์ — กดเริ่มประมวลผล")
 
 
 # ============================================================
