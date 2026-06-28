@@ -10,7 +10,9 @@ import json
 import math
 import tempfile
 import io
+import base64
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
@@ -481,7 +483,6 @@ def get_vision_client():
 
     if "gcp_service_account" not in st.secrets:
         st.error("ไม่พบ [gcp_service_account] ใน Streamlit Secrets")
-        st.info("ให้วาง APP_PASSWORD และ [gcp_service_account] ใน Settings > Secrets")
         st.stop()
 
     try:
@@ -894,6 +895,8 @@ if "results" not in st.session_state:
     st.session_state.results = None
 if "uploaded_file_names" not in st.session_state:
     st.session_state.uploaded_file_names = []
+if "auto_downloaded_token" not in st.session_state:
+    st.session_state.auto_downloaded_token = None
 
 
 # ============================================================
@@ -935,6 +938,46 @@ def format_money_series(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce").fillna(0.0)
 
 
+def auto_download_bytes(data: bytes, file_name: str, mime: str) -> None:
+    """Trigger browser download automatically after processing."""
+    b64 = base64.b64encode(data).decode("ascii")
+    file_name_js = json.dumps(file_name)
+    mime_js = json.dumps(mime)
+    b64_js = json.dumps(b64)
+    components.html(
+        f"""
+        <script>
+        (function() {{
+            const b64 = {b64_js};
+            const mime = {mime_js};
+            const fileName = {file_name_js};
+            const byteCharacters = atob(b64);
+            const byteArrays = [];
+            const sliceSize = 1024;
+            for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {{
+                const slice = byteCharacters.slice(offset, offset + sliceSize);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {{
+                    byteNumbers[i] = slice.charCodeAt(i);
+                }}
+                byteArrays.push(new Uint8Array(byteNumbers));
+            }}
+            const blob = new Blob(byteArrays, {{ type: mime }});
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }})();
+        </script>
+        """,
+        height=0,
+    )
+
+
 def main_app():
     st.title("STM Image Parser")
     st.caption(f"Google Cloud Vision OCR · ปีที่ใช้ {FORCE_YEAR}")
@@ -962,21 +1005,6 @@ def main_app():
     )
 
     if not uploaded_files:
-        st.info("อัปโหลดภาพ Statement เพื่อเริ่มใช้งาน")
-        with st.expander("รูปแบบ Secrets ที่ต้องตั้งค่า"):
-            st.code("""APP_PASSWORD = "รหัสที่ต้องการ"
-
-[gcp_service_account]
-type = "service_account"
-project_id = "..."
-private_key_id = "..."
-private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-client_email = "..."
-client_id = "..."
-auth_uri = "https://accounts.google.com/o/oauth2/auth"
-token_uri = "https://oauth2.googleapis.com/token"
-auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
-client_x509_cert_url = "...""" , language="toml")
         if st.button("ออกจากระบบ", use_container_width=True):
             st.session_state.authenticated = False
             st.session_state.results = None
@@ -1022,14 +1050,26 @@ client_x509_cert_url = "...""" , language="toml")
             parsed_df, check_df, review_df, active_bank = run_pipeline(
                 uploaded_files, bank_choice, prog_cb, stat_cb
             )
+            excel_bytes = create_excel(parsed_df, check_df, review_df, active_bank)
+            excel_name = f"stm_result_{active_bank.lower()}.xlsx"
+            download_token = datetime.now().strftime("%Y%m%d%H%M%S%f")
             st.session_state.results = {
                 "parsed": parsed_df,
                 "check": check_df,
                 "review": review_df,
                 "active_bank": active_bank,
+                "excel": excel_bytes,
+                "excel_name": excel_name,
+                "download_token": download_token,
             }
             progress_bar.progress(1.0, text="ประมวลผลเสร็จสิ้น")
-            status_box.success(f"ประมวลผลสำเร็จ พบ {len(parsed_df):,} รายการ · ธนาคาร: {active_bank}")
+            status_box.success(f"ประมวลผลสำเร็จ พบ {len(parsed_df):,} รายการ · ธนาคาร: {active_bank} · กำลังดาวน์โหลด Excel")
+            auto_download_bytes(
+                excel_bytes,
+                excel_name,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            st.session_state.auto_downloaded_token = download_token
         except Exception as e:
             progress_bar.empty()
             status_box.error(f"อ่านไฟล์ไม่สำเร็จ: {e}")
@@ -1044,7 +1084,7 @@ client_x509_cert_url = "...""" , language="toml")
 
         st.divider()
         st.success(f"ประมวลผลสำเร็จ! พบ {len(parsed_df):,} รายการ")
-        st.caption(f"ธนาคารที่ตรวจพบ/เลือกใช้: {active_bank} · Excel จะสร้างชีท parsed_stm · check · summary · ocr_review")
+        st.caption(f"ธนาคารที่ตรวจพบ/เลือกใช้: {active_bank} · ระบบดาวน์โหลด Excel ให้อัตโนมัติหลังประมวลผล")
 
         db_s = format_money_series(parsed_df.get("debit", pd.Series(dtype=float)))
         cr_s = format_money_series(parsed_df.get("credit", pd.Series(dtype=float)))
@@ -1085,7 +1125,7 @@ client_x509_cert_url = "...""" , language="toml")
 
         st.divider()
         st.markdown("#### รายละเอียดผลลัพธ์")
-        tab1, tab2, tab3, tab4 = st.tabs(["parsed_stm", "check", "OCR Review", "Export"])
+        tab1, tab2, tab3 = st.tabs(["parsed_stm", "check", "OCR Review"])
 
         with tab1:
             if parsed_df.empty:
@@ -1132,63 +1172,13 @@ client_x509_cert_url = "...""" , language="toml")
                 show_cols = [c for c in show_cols if c in review_df.columns]
                 st.dataframe(review_df[show_cols], use_container_width=True, height=420)
 
-        with tab4:
-            st.markdown("##### ดาวน์โหลดผลลัพธ์")
-            col_a, col_b, col_c = st.columns(3)
-
-            with col_a:
-                if not parsed_df.empty:
-                    csv_parsed = parsed_df.to_csv(index=False, encoding="utf-8-sig")
-                    st.download_button(
-                        "parsed_stm.csv",
-                        data=csv_parsed.encode("utf-8-sig"),
-                        file_name="parsed_stm.csv",
-                        mime="text/csv",
-                        use_container_width=True,
-                    )
-
-            with col_b:
-                if not check_df.empty:
-                    csv_check = check_df.to_csv(index=False, encoding="utf-8-sig")
-                    st.download_button(
-                        "check.csv",
-                        data=csv_check.encode("utf-8-sig"),
-                        file_name="check.csv",
-                        mime="text/csv",
-                        use_container_width=True,
-                    )
-
-            with col_c:
-                if not review_df.empty:
-                    csv_rev = review_df.to_csv(index=False, encoding="utf-8-sig")
-                    st.download_button(
-                        "ocr_review.csv",
-                        data=csv_rev.encode("utf-8-sig"),
-                        file_name="ocr_review.csv",
-                        mime="text/csv",
-                        use_container_width=True,
-                    )
-
-            try:
-                excel_bytes = create_excel(parsed_df, check_df, review_df, active_bank)
-                st.download_button(
-                    "ดาวน์โหลด Excel",
-                    data=excel_bytes,
-                    file_name="stm_result.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                    type="primary",
-                )
-            except Exception as e:
-                st.error(f"สร้าง Excel ไม่ได้: {e}")
-
         if st.button("ล้างข้อมูลหลังใช้งาน", use_container_width=True):
             st.session_state.results = None
             st.success("ล้างข้อมูล Session แล้ว")
             st.rerun()
 
     st.divider()
-    st.caption("รองรับ: KBANK · KRUNGSRI · BBL · SCB | ใช้ Secrets: APP_PASSWORD และ [gcp_service_account]")
+    st.caption("รองรับ: KBANK · KRUNGSRI · BBL · SCB")
 
 
 # ============================================================
