@@ -1,18 +1,15 @@
 # ============================================================
 # STM Image to Excel Parser — Streamlit Edition
 # KBANK + KRUNGSRI + BBL + SCB
-# รัน: streamlit run app.py
+# รัน: streamlit run appy.py
 # ============================================================
 
 import os
 import re
-import json
 import math
 import tempfile
 import io
-import base64
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
@@ -895,9 +892,6 @@ if "results" not in st.session_state:
     st.session_state.results = None
 if "uploaded_file_names" not in st.session_state:
     st.session_state.uploaded_file_names = []
-if "auto_downloaded_token" not in st.session_state:
-    st.session_state.auto_downloaded_token = None
-
 
 # ============================================================
 # 13)  LOGIN PAGE
@@ -937,45 +931,6 @@ def render_section(step_no: str, title: str, badge: str | None = None):
 def format_money_series(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce").fillna(0.0)
 
-
-def auto_download_bytes(data: bytes, file_name: str, mime: str) -> None:
-    """Trigger browser download automatically after processing."""
-    b64 = base64.b64encode(data).decode("ascii")
-    file_name_js = json.dumps(file_name)
-    mime_js = json.dumps(mime)
-    b64_js = json.dumps(b64)
-    components.html(
-        f"""
-        <script>
-        (function() {{
-            const b64 = {b64_js};
-            const mime = {mime_js};
-            const fileName = {file_name_js};
-            const byteCharacters = atob(b64);
-            const byteArrays = [];
-            const sliceSize = 1024;
-            for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {{
-                const slice = byteCharacters.slice(offset, offset + sliceSize);
-                const byteNumbers = new Array(slice.length);
-                for (let i = 0; i < slice.length; i++) {{
-                    byteNumbers[i] = slice.charCodeAt(i);
-                }}
-                byteArrays.push(new Uint8Array(byteNumbers));
-            }}
-            const blob = new Blob(byteArrays, {{ type: mime }});
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }})();
-        </script>
-        """,
-        height=0,
-    )
 
 
 def main_app():
@@ -1052,7 +1007,6 @@ def main_app():
             )
             excel_bytes = create_excel(parsed_df, check_df, review_df, active_bank)
             excel_name = f"stm_result_{active_bank.lower()}.xlsx"
-            download_token = datetime.now().strftime("%Y%m%d%H%M%S%f")
             st.session_state.results = {
                 "parsed": parsed_df,
                 "check": check_df,
@@ -1060,16 +1014,9 @@ def main_app():
                 "active_bank": active_bank,
                 "excel": excel_bytes,
                 "excel_name": excel_name,
-                "download_token": download_token,
             }
             progress_bar.progress(1.0, text="ประมวลผลเสร็จสิ้น")
-            status_box.success(f"ประมวลผลสำเร็จ พบ {len(parsed_df):,} รายการ · ธนาคาร: {active_bank} · กำลังดาวน์โหลด Excel")
-            auto_download_bytes(
-                excel_bytes,
-                excel_name,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-            st.session_state.auto_downloaded_token = download_token
+            status_box.success(f"ประมวลผลสำเร็จ พบ {len(parsed_df):,} รายการ · ธนาคาร: {active_bank}")
         except Exception as e:
             progress_bar.empty()
             status_box.error(f"อ่านไฟล์ไม่สำเร็จ: {e}")
@@ -1084,7 +1031,16 @@ def main_app():
 
         st.divider()
         st.success(f"ประมวลผลสำเร็จ! พบ {len(parsed_df):,} รายการ")
-        st.caption(f"ธนาคารที่ตรวจพบ/เลือกใช้: {active_bank} · ระบบดาวน์โหลด Excel ให้อัตโนมัติหลังประมวลผล")
+        st.caption(f"ธนาคารที่ตรวจพบ/เลือกใช้: {active_bank} · กดปุ่มด้านล่างเพื่อดาวน์โหลดไฟล์ Excel")
+
+        st.download_button(
+            label="⬇️ ดาวน์โหลด Excel",
+            data=res["excel"],
+            file_name=res.get("excel_name", "stm_result.xlsx"),
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            use_container_width=True,
+        )
 
         db_s = format_money_series(parsed_df.get("debit", pd.Series(dtype=float)))
         cr_s = format_money_series(parsed_df.get("credit", pd.Series(dtype=float)))
