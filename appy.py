@@ -1081,23 +1081,10 @@ def main_app():
         check_df = res["check"]
         review_df = res["review"]
         active_bank = res["active_bank"]
-        excel_bytes = res["excel"]
-        excel_name = res["excel_name"]
 
         st.divider()
         st.success(f"ประมวลผลสำเร็จ! พบ {len(parsed_df):,} รายการ")
-        
-        # ปุ่มดาวน์โหลดไฟล์ Excel
-        st.download_button(
-            label="📥 ดาวน์โหลดไฟล์ Excel",
-            data=excel_bytes,
-            file_name=excel_name,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary",
-            use_container_width=True
-        )
-        
-        st.caption(f"ธนาคารที่ตรวจพบ/เลือกใช้: {active_bank} · ระบบดาวน์โหลด Excel ให้อัตโนมัติหลังประมวลผล และสามารถกดดาวน์โหลดเองได้จากปุ่มด้านบน")
+        st.caption(f"ธนาคารที่ตรวจพบ/เลือกใช้: {active_bank} · ระบบดาวน์โหลด Excel ให้อัตโนมัติหลังประมวลผล")
 
         db_s = format_money_series(parsed_df.get("debit", pd.Series(dtype=float)))
         cr_s = format_money_series(parsed_df.get("credit", pd.Series(dtype=float)))
