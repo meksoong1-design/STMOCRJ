@@ -1,7 +1,7 @@
 # ============================================================
 # STM Image to Excel Parser — Streamlit Edition
 # KBANK + KRUNGSRI + BBL + SCB
-# รัน: streamlit run appy.py
+# รัน: streamlit run app.py
 # ============================================================
 
 import os
@@ -812,7 +812,7 @@ def run_pipeline(
 
 
 # ============================================================
-# 11)  Excel Export
+# 11)  Excel Export (Updated Format from Target Script)
 # ============================================================
 def create_excel(parsed_df: pd.DataFrame, check_df: pd.DataFrame,
                  review_df: pd.DataFrame, active_bank: str) -> bytes:
@@ -823,7 +823,7 @@ def create_excel(parsed_df: pd.DataFrame, check_df: pd.DataFrame,
 
     buf = io.BytesIO()
 
-    # Build summary
+    # 1. Build Summary
     db_s  = pd.to_numeric(parsed_df.get("debit",  pd.Series(dtype=float)), errors="coerce")
     cr_s  = pd.to_numeric(parsed_df.get("credit", pd.Series(dtype=float)), errors="coerce")
     summary_df = pd.DataFrame([
@@ -836,47 +836,103 @@ def create_excel(parsed_df: pd.DataFrame, check_df: pd.DataFrame,
         ["anomalies_found",  int(check_df["balance_check"].astype(str).str.contains("REVIEW|BROKEN|MISSING").sum()) if not check_df.empty else 0],
     ], columns=["metric","value"])
 
+    # 2. Prepare parsed_stm (Only the 4 requested columns)
+    parsed_export_cols = ["date", "debit", "credit", "balance"]
+    parsed_export_df = parsed_df[[c for c in parsed_export_cols if c in parsed_df.columns]].copy()
+
+    # 3. Prepare check export
+    check_export_df = check_df.copy()
+    drop_cols = ["amount", "line_confidence", "min_confidence", "money_tokens", "raw_line_text", "balance_check"]
+    check_export_df = check_export_df.drop(columns=[c for c in drop_cols if c in check_export_df.columns], errors="ignore")
+    check_export_df = check_export_df.rename(columns={"expected_balance": "expected_balance_py", "diff": "diff_py"})
+    check_export_df["expected_balance_excel"] = None
+    check_export_df["anomaly_reason_excel"] = None
+
+    # Write initial data to BytesIO buffer
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        parsed_df.to_excel(writer, sheet_name="parsed_stm", index=False)
-        check_df.to_excel(writer,  sheet_name="check",      index=False)
+        parsed_export_df.to_excel(writer, sheet_name="parsed_stm", index=False)
+        check_export_df.to_excel(writer,  sheet_name="check",      index=False)
         summary_df.to_excel(writer,sheet_name="summary",    index=False)
         review_df.to_excel(writer, sheet_name="ocr_review", index=False)
 
     buf.seek(0)
     wb = load_workbook(buf)
 
-    # Format "check" sheet
+    # 4. Format "check" sheet with specific logic and formulas
     if "check" in wb.sheetnames:
         ws = wb["check"]
         headers = {str(cell.value): cell.column for cell in ws[1] if cell.value}
-        hfill = PatternFill("solid", fgColor="1E3A5F")
-        hfont = Font(color="FFFFFF", bold=True)
-        thin  = Side(style="thin", color="2D3347")
+        
+        def get_col(name):
+            return get_column_letter(headers[name]) if name in headers else None
+
+        debit_col = get_col("debit")
+        credit_col = get_col("credit")
+        balance_col = get_col("balance")
+        prev_col = get_col("prev_balance")
+        suggested_col = get_col("suggested_amount")
+        expected_col = get_col("expected_balance_excel")
+        reason_col = get_col("anomaly_reason_excel")
+
+        tol = BALANCE_TOLERANCE
+
+        # Apply Formulas row by row
+        for row in range(2, ws.max_row + 1):
+            if expected_col and prev_col and debit_col and credit_col:
+                ws[f"{expected_col}{row}"] = (
+                    f'=IF({prev_col}{row}="","",ROUND({prev_col}{row}'
+                    f'-IF({debit_col}{row}="",0,{debit_col}{row})'
+                    f'+IF({credit_col}{row}="",0,{credit_col}{row}),2))'
+                )
+
+            if reason_col and prev_col and balance_col and expected_col and debit_col and credit_col:
+                sg_ref = f'{suggested_col}{row}' if suggested_col else '""'
+                ws[f"{reason_col}{row}"] = (
+                    f'=IF({prev_col}{row}="","OPENING_OR_NO_PREV",'
+                    f'IF({balance_col}{row}="","MISSING_BALANCE",'
+                    f'IF({sg_ref}<>"","กระทบยอดให้ตรวจสอบ",'
+                    f'IF(AND({debit_col}{row}="",{credit_col}{row}=""),"MISSING_DEBIT_CREDIT",'
+                    f'IF(ABS({balance_col}{row}-{expected_col}{row})>{tol},"BALANCE_NOT_MATCH","OK")))))'
+                )
+
+        # Style configurations matching Target Version
+        header_fill = PatternFill("solid", fgColor="D9EAF7")
+        header_font = Font(color="000000", bold=True)
+        thin  = Side(style="thin", color="D9E2F3")
+        
         for cell in ws[1]:
-            cell.fill = hfill; cell.font = hfont
+            cell.fill = header_fill
+            cell.font = header_font
             cell.alignment = Alignment(horizontal="center", vertical="center")
             cell.border = Border(bottom=thin)
-        num_cols = ["debit","credit","balance","prev_balance","amount","suggested_amount","expected_balance","diff"]
+
+        # Apply number formats
+        num_cols = ["debit","credit","balance","prev_balance","suggested_amount","expected_balance_py","diff_py","expected_balance_excel"]
         for col in num_cols:
             if col in headers:
                 for row in range(2, ws.max_row+1):
                     ws.cell(row=row, column=headers[col]).number_format = "#,##0.00"
+        
         ws.freeze_panes = "A2"
+        ws.auto_filter.ref = None
+        
+        # Highlight Condition matching Target Version
         light_red = PatternFill("solid", fgColor="FCE4E4")
         dark_font = Font(color="9C0006")
-        if "balance_check" in headers:
-            bc_col = get_column_letter(headers["balance_check"])
+        if reason_col:
             ws.conditional_formatting.add(
                 f"A2:{get_column_letter(ws.max_column)}{ws.max_row}",
                 FormulaRule(
-                    formula=[f'=AND(${bc_col}2<>"OK_DEBIT",${bc_col}2<>"OK_CREDIT",${bc_col}2<>"OPENING_BALANCE",${bc_col}2<>"")'],
+                    formula=[f'=AND(${reason_col}2<>"OK",${reason_col}2<>"OPENING_OR_NO_PREV",${reason_col}2<>"")'],
                     fill=light_red, font=dark_font
                 )
             )
+            
+        # Adjust column widths
         for col_idx in range(1, ws.max_column+1):
             cl = get_column_letter(col_idx)
             max_len = max((len(str(c.value or "")) for c in ws[cl]), default=10)
-            ws.column_dimensions[cl].width = min(max(max_len+2, 12), 40)
+            ws.column_dimensions[cl].width = min(max(max_len+2, 12), 35)
 
     out = io.BytesIO()
     wb.save(out)
@@ -956,7 +1012,7 @@ def main_app():
         "เลือกไฟล์ภาพ Statement (อัปโหลดได้หลายไฟล์พร้อมกัน)",
         type=["jpg", "jpeg", "png"],
         accept_multiple_files=True,
-        help="รองรับ JPG / PNG · KBANK / KRUNGSRI / BBL / SCB",
+        help="รองรับ JPG / PNG · KB বৃহত্তর / KRUNGSRI / BBL / SCB",
     )
 
     if not uploaded_files:
