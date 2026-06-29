@@ -1019,9 +1019,9 @@ def main_app():
     with col_btn:
         run_clicked = st.button("เริ่มประมวลผล", type="primary", use_container_width=True)
     with col_info:
-        #st.markdown(
-            #'<div class="muted-note">ระบบจะเลือกภาพที่ OCR ชัดที่สุดจากหลายเวอร์ชัน แล้วตรวจ Balance Chain ให้อัตโนมัติ</div>',
-            #unsafe_allow_html=True,
+        st.markdown(
+            '<div class="muted-note"></div>',
+            unsafe_allow_html=True,
         )
 
     col_clear, col_logout = st.columns([1, 1])
