@@ -1022,7 +1022,7 @@ def main_app():
         #st.markdown(
             #'<div class="muted-note">ระบบจะเลือกภาพที่ OCR ชัดที่สุดจากหลายเวอร์ชัน แล้วตรวจ Balance Chain ให้อัตโนมัติ</div>',
             #unsafe_allow_html=True,
-        #)
+        )
 
     col_clear, col_logout = st.columns([1, 1])
     with col_clear:
