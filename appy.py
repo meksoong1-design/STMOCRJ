@@ -12,7 +12,6 @@ import tempfile
 import io
 import base64
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
@@ -27,7 +26,6 @@ st.set_page_config(
 # ─── CSS ────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* ใช้ Theme ของ Streamlit เป็นหลัก เพื่อให้เข้ากับ Light / Dark mode */
     .block-container {
         padding-top: 2rem;
         padding-bottom: 3rem;
@@ -437,33 +435,28 @@ def preprocess_image_variants(pil_img: Image.Image, base_name: str) -> list[tupl
     img = pil_img.convert("RGB")
     variants = [("original", img)]
 
-    # 2x + contrast + sharpen
     i1 = img.resize((img.width*2, img.height*2), Image.LANCZOS)
     i1 = ImageEnhance.Contrast(i1).enhance(1.9)
     i1 = ImageEnhance.Sharpness(i1).enhance(2.2)
     variants.append(("2x_contrast_sharp", i1))
 
-    # 3x + grayscale + autocontrast
     i2 = img.resize((img.width*3, img.height*3), Image.LANCZOS)
     i2 = i2.convert("L"); i2 = ImageOps.autocontrast(i2)
     i2 = ImageEnhance.Contrast(i2).enhance(1.8)
     i2 = ImageEnhance.Sharpness(i2).enhance(2.0)
     variants.append(("3x_gray_autocontrast", i2))
 
-    # 3x + UnsharpMask
     i3 = img.resize((img.width*3, img.height*3), Image.LANCZOS)
     i3 = i3.convert("L"); i3 = ImageOps.autocontrast(i3)
     i3 = i3.filter(ImageFilter.UnsharpMask(radius=1.2, percent=180, threshold=3))
     variants.append(("3x_unsharp", i3))
 
-    # 3x BW threshold 175
     i4 = img.resize((img.width*3, img.height*3), Image.LANCZOS)
     i4 = i4.convert("L"); i4 = ImageOps.autocontrast(i4)
     i4 = ImageEnhance.Contrast(i4).enhance(2.0)
     i4 = i4.point(lambda x: 255 if x > 175 else 0)
     variants.append(("3x_bw_175", i4))
 
-    # 3x BW threshold 145
     i5 = img.resize((img.width*3, img.height*3), Image.LANCZOS)
     i5 = i5.convert("L"); i5 = ImageOps.autocontrast(i5)
     i5 = ImageEnhance.Contrast(i5).enhance(1.7)
@@ -477,7 +470,6 @@ def preprocess_image_variants(pil_img: Image.Image, base_name: str) -> list[tupl
 # 6)  Google Vision OCR
 # ============================================================
 def get_vision_client():
-    """สร้าง Vision client จาก Streamlit Secrets แบบ [gcp_service_account]"""
     from google.cloud import vision
     from google.oauth2 import service_account
 
@@ -487,11 +479,8 @@ def get_vision_client():
 
     try:
         info = dict(st.secrets["gcp_service_account"])
-
-        # เผื่อ private_key ถูกวางมาเป็น \n แบบ string ให้แปลงเป็น newline จริง
         if "private_key" in info and isinstance(info["private_key"], str):
             info["private_key"] = info["private_key"].replace("\\n", "\n")
-
         creds = service_account.Credentials.from_service_account_info(
             info,
             scopes=["https://www.googleapis.com/auth/cloud-platform"],
@@ -580,7 +569,6 @@ def parse_lines(words_df: pd.DataFrame, active_bank: str) -> pd.DataFrame:
         time = extract_time(raw)
         is_opening = has_opening_text(raw, active_bank)
         if not date and not is_opening: continue
-        # collect money values
         money_vals = []
         for _, row in g.sort_values("x_center").iterrows():
             txt = normalize_amount_text(str(row["text"]))
@@ -751,9 +739,6 @@ def run_pipeline(
     progress_cb=None,
     status_cb=None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str]:
-    """
-    Returns: (parsed_df, check_df, review_df, active_bank)
-    """
     client = get_vision_client()
     all_words_list, all_full_texts = [], []
     n = len(uploaded_files)
@@ -777,8 +762,8 @@ def run_pipeline(
                     best_score = score
                     best_words = word_df
                     best_text  = full_text
-            except Exception as e:
-                pass  # skip failed variant
+            except Exception:
+                pass
 
         if best_words is None:
             raise RuntimeError(f"OCR ล้มเหลวทุก variant สำหรับ {fname}")
@@ -826,7 +811,6 @@ def create_excel(parsed_df: pd.DataFrame, check_df: pd.DataFrame,
 
     buf = io.BytesIO()
 
-    # Build summary
     db_s  = pd.to_numeric(parsed_df.get("debit",  pd.Series(dtype=float)), errors="coerce")
     cr_s  = pd.to_numeric(parsed_df.get("credit", pd.Series(dtype=float)), errors="coerce")
     summary_df = pd.DataFrame([
@@ -848,7 +832,6 @@ def create_excel(parsed_df: pd.DataFrame, check_df: pd.DataFrame,
     buf.seek(0)
     wb = load_workbook(buf)
 
-    # Format "check" sheet
     if "check" in wb.sheetnames:
         ws = wb["check"]
         headers = {str(cell.value): cell.column for cell in ws[1] if cell.value}
@@ -893,10 +876,6 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "results" not in st.session_state:
     st.session_state.results = None
-if "uploaded_file_names" not in st.session_state:
-    st.session_state.uploaded_file_names = []
-if "auto_downloaded_token" not in st.session_state:
-    st.session_state.auto_downloaded_token = None
 
 
 # ============================================================
@@ -936,46 +915,6 @@ def render_section(step_no: str, title: str, badge: str | None = None):
 
 def format_money_series(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce").fillna(0.0)
-
-
-def auto_download_bytes(data: bytes, file_name: str, mime: str) -> None:
-    """Trigger browser download automatically after processing."""
-    b64 = base64.b64encode(data).decode("ascii")
-    file_name_js = json.dumps(file_name)
-    mime_js = json.dumps(mime)
-    b64_js = json.dumps(b64)
-    components.html(
-        f"""
-        <script>
-        (function() {{
-            const b64 = {b64_js};
-            const mime = {mime_js};
-            const fileName = {file_name_js};
-            const byteCharacters = atob(b64);
-            const byteArrays = [];
-            const sliceSize = 1024;
-            for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {{
-                const slice = byteCharacters.slice(offset, offset + sliceSize);
-                const byteNumbers = new Array(slice.length);
-                for (let i = 0; i < slice.length; i++) {{
-                    byteNumbers[i] = slice.charCodeAt(i);
-                }}
-                byteArrays.push(new Uint8Array(byteNumbers));
-            }}
-            const blob = new Blob(byteArrays, {{ type: mime }});
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }})();
-        </script>
-        """,
-        height=0,
-    )
 
 
 def main_app():
@@ -1019,10 +958,7 @@ def main_app():
     with col_btn:
         run_clicked = st.button("เริ่มประมวลผล", type="primary", use_container_width=True)
     with col_info:
-        st.markdown(
-            '<div class="muted-note"></div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="muted-note"></div>', unsafe_allow_html=True)
 
     col_clear, col_logout = st.columns([1, 1])
     with col_clear:
@@ -1052,7 +988,6 @@ def main_app():
             )
             excel_bytes = create_excel(parsed_df, check_df, review_df, active_bank)
             excel_name = f"stm_result_{active_bank.lower()}.xlsx"
-            download_token = datetime.now().strftime("%Y%m%d%H%M%S%f")
             st.session_state.results = {
                 "parsed": parsed_df,
                 "check": check_df,
@@ -1060,50 +995,58 @@ def main_app():
                 "active_bank": active_bank,
                 "excel": excel_bytes,
                 "excel_name": excel_name,
-                "download_token": download_token,
             }
-            progress_bar.progress(1.0, text="ประมวลผลเสร็จสิ้น")
-            status_box.success(f"ประมวลผลสำเร็จ พบ {len(parsed_df):,} รายการ · ธนาคาร: {active_bank} · กำลังดาวน์โหลด Excel")
-            auto_download_bytes(
-                excel_bytes,
-                excel_name,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-            st.session_state.auto_downloaded_token = download_token
+            progress_bar.progress(1.0, text="ประมวลผลเสร็จสิ้น ✅")
+            status_box.success(f"ประมวลผลสำเร็จ พบ {len(parsed_df):,} รายการ · ธนาคาร: {active_bank}")
         except Exception as e:
             progress_bar.empty()
             status_box.error(f"อ่านไฟล์ไม่สำเร็จ: {e}")
             st.exception(e)
 
-    if "results" in st.session_state and st.session_state.results:
+    # ─── Results Section ──────────────────────────────────────
+    if st.session_state.results:
         res = st.session_state.results
-        parsed_df = res["parsed"]
-        check_df = res["check"]
-        review_df = res["review"]
+        parsed_df   = res["parsed"]
+        check_df    = res["check"]
+        review_df   = res["review"]
         active_bank = res["active_bank"]
+        excel_bytes = res["excel"]
+        excel_name  = res["excel_name"]
 
         st.divider()
         st.success(f"ประมวลผลสำเร็จ! พบ {len(parsed_df):,} รายการ")
-        st.caption(f"ธนาคารที่ตรวจพบ/เลือกใช้: {active_bank} · ระบบดาวน์โหลด Excel ให้อัตโนมัติหลังประมวลผล")
+        st.caption(f"ธนาคารที่ตรวจพบ/เลือกใช้: {active_bank}")
 
-        db_s = format_money_series(parsed_df.get("debit", pd.Series(dtype=float)))
-        cr_s = format_money_series(parsed_df.get("credit", pd.Series(dtype=float)))
+        # ── Download button (manual, prominent) ───────────────
+        st.download_button(
+            label="📥 ดาวน์โหลด Excel",
+            data=excel_bytes,
+            file_name=excel_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            use_container_width=True,
+        )
+
+        st.divider()
+
+        db_s  = format_money_series(parsed_df.get("debit",  pd.Series(dtype=float)))
+        cr_s  = format_money_series(parsed_df.get("credit", pd.Series(dtype=float)))
         bal_s = pd.to_numeric(parsed_df.get("balance", pd.Series(dtype=float)), errors="coerce")
-        net = cr_s.sum() - db_s.sum()
+        net     = cr_s.sum() - db_s.sum()
         last_bal = float(bal_s.dropna().iloc[-1]) if len(bal_s.dropna()) else 0.0
-        ok_n = int(check_df["balance_check"].astype(str).str.contains("OK").sum()) if not check_df.empty else 0
-        rv_n = len(review_df)
+        ok_n    = int(check_df["balance_check"].astype(str).str.contains("OK").sum()) if not check_df.empty else 0
+        rv_n    = len(review_df)
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("จำนวนรายการ", f"{len(parsed_df):,}")
+        c1.metric("จำนวนรายการ",      f"{len(parsed_df):,}")
         c2.metric("ยอดคงเหลือล่าสุด", f"{last_bal:,.2f}")
-        c3.metric("ผ่านตรวจสอบ", f"{ok_n:,}")
-        c4.metric("ต้องตรวจ", f"{rv_n:,}")
+        c3.metric("ผ่านตรวจสอบ",      f"{ok_n:,}")
+        c4.metric("ต้องตรวจ",         f"{rv_n:,}")
 
         c5, c6, c7 = st.columns(3)
-        c5.metric("รวมเดบิต", f"{db_s.sum():,.2f}")
+        c5.metric("รวมเดบิต",  f"{db_s.sum():,.2f}")
         c6.metric("รวมเครดิต", f"{cr_s.sum():,.2f}")
-        c7.metric("ยอดสุทธิ", f"{net:,.2f}")
+        c7.metric("ยอดสุทธิ",  f"{net:,.2f}")
 
         st.markdown("#### ตัวอย่างรายการ")
         if parsed_df.empty:
@@ -1115,8 +1058,8 @@ def main_app():
                     preview_df[col] = pd.to_numeric(preview_df[col], errors="coerce")
             st.dataframe(
                 preview_df.style.format({
-                    "debit": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
-                    "credit": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
+                    "debit":   lambda v: f"{v:,.2f}" if pd.notna(v) else "",
+                    "credit":  lambda v: f"{v:,.2f}" if pd.notna(v) else "",
                     "balance": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
                 }),
                 use_container_width=True,
@@ -1144,8 +1087,8 @@ def main_app():
 
                 st.dataframe(
                     display_df.style.apply(highlight_row, axis=1).format({
-                        "debit": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
-                        "credit": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
+                        "debit":   lambda v: f"{v:,.2f}" if pd.notna(v) else "",
+                        "credit":  lambda v: f"{v:,.2f}" if pd.notna(v) else "",
                         "balance": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
                     }),
                     use_container_width=True,
@@ -1157,8 +1100,8 @@ def main_app():
                 st.info("ไม่มีข้อมูล")
             else:
                 show_cols = [
-                    "seq", "date", "time", "debit", "credit", "balance",
-                    "prev_balance", "expected_balance", "diff", "balance_check", "raw_line_text",
+                    "seq","date","time","debit","credit","balance",
+                    "prev_balance","expected_balance","diff","balance_check","raw_line_text",
                 ]
                 show_cols = [c for c in show_cols if c in check_df.columns]
                 st.dataframe(check_df[show_cols], use_container_width=True, height=520)
@@ -1168,9 +1111,21 @@ def main_app():
                 st.success("ไม่มีรายการที่ต้องตรวจสอบ")
             else:
                 st.warning(f"พบ {len(review_df):,} รายการที่ต้องตรวจสอบ")
-                show_cols = ["seq", "date", "debit", "credit", "balance", "balance_check", "raw_line_text"]
+                show_cols = ["seq","date","debit","credit","balance","balance_check","raw_line_text"]
                 show_cols = [c for c in show_cols if c in review_df.columns]
                 st.dataframe(review_df[show_cols], use_container_width=True, height=420)
+
+        st.divider()
+
+        # ── Bottom download button (second copy for convenience) ──
+        st.download_button(
+            label="📥 ดาวน์โหลด Excel",
+            data=excel_bytes,
+            file_name=excel_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_bottom",
+            use_container_width=True,
+        )
 
         if st.button("ล้างข้อมูลหลังใช้งาน", use_container_width=True):
             st.session_state.results = None
