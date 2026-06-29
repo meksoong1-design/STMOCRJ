@@ -627,10 +627,80 @@ def deduplicate(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=["_dup_key"], errors="ignore")
 
 
+def is_opening_check_row(row, active_bank: str = "DEFAULT") -> bool:
+    raw_line_text = str(row.get("raw_line_text", ""))
+    code = str(row.get("code", ""))
+    balance_check = str(row.get("balance_check", ""))
+    return (
+        has_opening_text(raw_line_text, active_bank)
+        or code == "OPENING"
+        or balance_check == "OPENING_BALANCE"
+    )
+
+
+def build_final_parsed_stm_from_check(check_df: pd.DataFrame, active_bank: str = "DEFAULT") -> pd.DataFrame:
+    """
+    ใช้ logic จากโค้ดที่ 1:
+    - parsed_stm ต้องสร้างจาก check_df ที่ผ่านการเรียงและตรวจ balance-chain แล้ว
+    - คอลัมน์ปลายทางต้องเหลือแค่ date, debit, credit, balance
+    - ห้าม sort วัน/เวลาใหม่เอง ให้รักษาลำดับ seq จาก check_df
+    """
+    parsed_cols = ["date", "debit", "credit", "balance"]
+
+    if check_df is None or check_df.empty:
+        return pd.DataFrame(columns=parsed_cols)
+
+    df = check_df.copy()
+    required_cols = [
+        "seq", "date", "debit", "credit", "balance",
+        "balance_check", "raw_line_text", "code"
+    ]
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = None
+
+    opening_mask = df.apply(lambda r: is_opening_check_row(r, active_bank), axis=1)
+    df = df[~opening_mask].copy()
+
+    df = df[df["balance"].apply(is_valid_number)].copy()
+
+    has_debit_or_credit = (
+        df["debit"].apply(is_valid_number)
+        | df["credit"].apply(is_valid_number)
+    )
+    df = df[has_debit_or_credit].copy()
+
+    df = df.sort_values("seq").reset_index(drop=True)
+    final_df = df[parsed_cols].copy()
+
+    for col in ["debit", "credit", "balance"]:
+        final_df[col] = pd.to_numeric(final_df[col], errors="coerce")
+
+    return final_df.reset_index(drop=True)
+
+
 def add_debit_credit_check(ordered_df: pd.DataFrame, active_bank: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    สร้าง check_df ก่อน แล้วค่อยสร้าง parsed_stm จาก check_df อีกที
+    เพื่อให้ผลลัพธ์/ชีท/คอลัมน์ตรงกับโค้ดที่ 1
+    """
+    check_cols = [
+        "seq", "date", "time", "code", "debit", "credit", "balance",
+        "prev_balance", "amount", "suggested_amount", "suggested_type",
+        "expected_balance", "diff", "line_confidence", "min_confidence",
+        "money_tokens", "raw_line_text", "order_method", "balance_check"
+    ]
+
+    if ordered_df is None or ordered_df.empty:
+        return (
+            pd.DataFrame(columns=["date", "debit", "credit", "balance"]),
+            pd.DataFrame(columns=check_cols),
+        )
+
     check_rows = []
     prev_balance = None
     seq = 0
+
     for _, row in ordered_df.iterrows():
         seq += 1
         date         = row.get("date")
@@ -649,11 +719,11 @@ def add_debit_credit_check(ordered_df: pd.DataFrame, active_bank: str) -> tuple[
         balance_check = ""
 
         low_conf = (
-            (line_conf is not None and not math.isnan(line_conf) and line_conf < LOW_CONF_THRESHOLD) or
-            (min_conf  is not None and not math.isnan(min_conf)  and min_conf  < LOW_CONF_THRESHOLD)
+            (line_conf is not None and not pd.isna(line_conf) and line_conf < LOW_CONF_THRESHOLD) or
+            (min_conf  is not None and not pd.isna(min_conf)  and min_conf  < LOW_CONF_THRESHOLD)
         )
 
-        if is_opening or code == "OPENING":
+        if is_opening or code == "OPENING" or has_opening_text(raw, active_bank):
             balance_check = "OPENING_BALANCE"
         else:
             match = amount_balance_match(prev_balance, amount, bal_val)
@@ -661,28 +731,37 @@ def add_debit_credit_check(ordered_df: pd.DataFrame, active_bank: str) -> tuple[
                 expected_balance = match["expected_balance"]
                 diff_            = match["diff"]
                 balance_check    = match["balance_check"]
-                if match["type"] == "debit": debit  = amount
-                else:                        credit = amount
+                if match["type"] == "debit":
+                    debit = amount
+                else:
+                    credit = amount
             else:
                 h_amt, h_type = try_healing_amount(prev_balance, amount, bal_val)
                 if h_amt is not None:
-                    if "debit"  in h_type: debit  = h_amt
-                    else:                  credit = h_amt
-                    expected_balance = bal_val; diff_ = 0.0
+                    if "debit" in h_type:
+                        debit = h_amt
+                    else:
+                        credit = h_amt
+                    expected_balance = bal_val
+                    diff_ = 0.0
                     balance_check = f"OK_{h_type.upper()}"
                 else:
                     tx_type = classify_kw(raw, active_bank)
                     s_amt, s_type = suggest_from_balance(prev_balance, bal_val)
-                    if s_amt is not None and s_type in ("debit","credit"):
+                    if s_amt is not None and s_type in ("debit", "credit"):
                         suggested_amount, suggested_type = s_amt, s_type
                         expected_balance = round(
-                            (prev_balance - s_amt) if s_type=="debit" else (prev_balance + s_amt), 2
+                            (prev_balance - s_amt) if s_type == "debit" else (prev_balance + s_amt),
+                            2,
                         ) if prev_balance is not None else None
                         diff_ = round(bal_val - expected_balance, 2) if expected_balance is not None else None
+
                         if tx_type == s_type:
                             balance_check = "SUGGEST_AMOUNT_BY_KEYWORD_REVIEW"
-                            if s_type == "debit": debit  = s_amt
-                            else:                 credit = s_amt
+                            if s_type == "debit":
+                                debit = s_amt
+                            else:
+                                credit = s_amt
                         else:
                             balance_check = "SUGGEST_AMOUNT_REVIEW"
                     else:
@@ -692,25 +771,32 @@ def add_debit_credit_check(ordered_df: pd.DataFrame, active_bank: str) -> tuple[
             balance_check += "_LOW_CONFIDENCE"
 
         check_rows.append({
-            "seq": seq, "date": date, "time": time, "code": code,
-            "debit": debit, "credit": credit, "balance": bal_val,
-            "prev_balance": prev_balance, "amount": amount,
-            "suggested_amount": suggested_amount, "suggested_type": suggested_type,
-            "expected_balance": expected_balance, "diff": diff_,
-            "line_confidence": line_conf, "min_confidence": min_conf,
-            "money_tokens": money_tokens, "raw_line_text": raw,
-            "order_method": order_method, "balance_check": balance_check,
+            "seq": seq,
+            "date": date,
+            "time": time,
+            "code": code,
+            "debit": debit,
+            "credit": credit,
+            "balance": bal_val,
+            "prev_balance": prev_balance,
+            "amount": amount,
+            "suggested_amount": suggested_amount,
+            "suggested_type": suggested_type,
+            "expected_balance": expected_balance,
+            "diff": diff_,
+            "line_confidence": line_conf,
+            "min_confidence": min_conf,
+            "money_tokens": money_tokens,
+            "raw_line_text": raw,
+            "order_method": order_method,
+            "balance_check": balance_check,
         })
-        if bal_val is not None and not (isinstance(bal_val, float) and math.isnan(bal_val)):
+
+        if bal_val is not None and not pd.isna(bal_val):
             prev_balance = bal_val
 
-    check_df = pd.DataFrame(check_rows)
-    parsed_df = check_df[
-        (check_df["balance_check"] != "OPENING_BALANCE") &
-        (check_df["balance"].apply(is_valid_number)) &
-        (check_df["debit"].apply(is_valid_number) | check_df["credit"].apply(is_valid_number))
-    ][["date","time","debit","credit","balance","balance_check","raw_line_text"]].copy()
-    parsed_df = parsed_df.reset_index(drop=True)
+    check_df = pd.DataFrame(check_rows, columns=check_cols)
+    parsed_df = build_final_parsed_stm_from_check(check_df, active_bank)
     return parsed_df, check_df
 
 
@@ -802,6 +888,58 @@ def run_pipeline(
 # ============================================================
 # 11)  Excel Export
 # ============================================================
+def create_summary_df(parsed_df: pd.DataFrame, check_df: pd.DataFrame, active_bank: str) -> pd.DataFrame:
+    db_s = pd.to_numeric(parsed_df.get("debit", pd.Series(dtype=float)), errors="coerce")
+    cr_s = pd.to_numeric(parsed_df.get("credit", pd.Series(dtype=float)), errors="coerce")
+
+    return pd.DataFrame([
+        ["detected_bank", active_bank],
+        ["transaction_rows", int(parsed_df["date"].notna().sum()) if not parsed_df.empty else 0],
+        ["debit_total", float(db_s.fillna(0).sum())],
+        ["credit_total", float(cr_s.fillna(0).sum())],
+        ["net_change", float(cr_s.fillna(0).sum() - db_s.fillna(0).sum())],
+        ["ok_checks", int(check_df["balance_check"].astype(str).str.contains("OK").sum()) if not check_df.empty and "balance_check" in check_df.columns else 0],
+        ["anomalies_found", int(check_df["balance_check"].astype(str).str.contains("REVIEW|BROKEN|MISSING", regex=True).sum()) if not check_df.empty and "balance_check" in check_df.columns else 0],
+    ], columns=["metric", "value"])
+
+
+def prepare_check_export_df(check_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    ใช้โครงสร้างคอลัมน์ check แบบโค้ดที่ 1:
+    - ซ่อน field ที่รก/ใช้ debug OCR ภายใน
+    - เปลี่ยนชื่อ expected_balance/diff เป็น expected_balance_py/diff_py
+    - เพิ่ม expected_balance_excel/anomaly_reason_excel สำหรับสูตรใน Excel
+    """
+    export_cols = [
+        "seq", "date", "time", "code", "debit", "credit", "balance",
+        "prev_balance", "suggested_amount", "suggested_type",
+        "expected_balance_py", "diff_py", "order_method",
+        "expected_balance_excel", "anomaly_reason_excel",
+    ]
+
+    if check_df is None or check_df.empty:
+        return pd.DataFrame(columns=export_cols)
+
+    df = check_df.copy()
+    df = df.drop(
+        columns=[
+            "amount", "line_confidence", "min_confidence",
+            "money_tokens", "raw_line_text", "balance_check",
+        ],
+        errors="ignore",
+    )
+    df = df.rename(columns={"expected_balance": "expected_balance_py", "diff": "diff_py"})
+    df["expected_balance_excel"] = None
+    df["anomaly_reason_excel"] = None
+
+    for col in export_cols:
+        if col not in df.columns:
+            df[col] = None
+
+    extra_cols = [c for c in df.columns if c not in export_cols]
+    return df[export_cols + extra_cols]
+
+
 def create_excel(parsed_df: pd.DataFrame, check_df: pd.DataFrame,
                  review_df: pd.DataFrame, active_bank: str) -> bytes:
     from openpyxl import load_workbook
@@ -811,58 +949,119 @@ def create_excel(parsed_df: pd.DataFrame, check_df: pd.DataFrame,
 
     buf = io.BytesIO()
 
-    db_s  = pd.to_numeric(parsed_df.get("debit",  pd.Series(dtype=float)), errors="coerce")
-    cr_s  = pd.to_numeric(parsed_df.get("credit", pd.Series(dtype=float)), errors="coerce")
-    summary_df = pd.DataFrame([
-        ["detected_bank",    active_bank],
-        ["transaction_rows", int(parsed_df["date"].notna().sum()) if not parsed_df.empty else 0],
-        ["debit_total",      float(db_s.fillna(0).sum())],
-        ["credit_total",     float(cr_s.fillna(0).sum())],
-        ["net_change",       float(cr_s.fillna(0).sum() - db_s.fillna(0).sum())],
-        ["ok_checks",        int(check_df["balance_check"].astype(str).str.contains("OK").sum()) if not check_df.empty else 0],
-        ["anomalies_found",  int(check_df["balance_check"].astype(str).str.contains("REVIEW|BROKEN|MISSING").sum()) if not check_df.empty else 0],
-    ], columns=["metric","value"])
+    # บังคับ parsed_stm ให้เป็นคอลัมน์แบบโค้ดที่ 1 เสมอ
+    parsed_export_df = parsed_df.copy()
+    for col in ["date", "debit", "credit", "balance"]:
+        if col not in parsed_export_df.columns:
+            parsed_export_df[col] = None
+    parsed_export_df = parsed_export_df[["date", "debit", "credit", "balance"]]
+
+    check_export_df = prepare_check_export_df(check_df)
+    summary_df = create_summary_df(parsed_export_df, check_df, active_bank)
 
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        parsed_df.to_excel(writer, sheet_name="parsed_stm", index=False)
-        check_df.to_excel(writer,  sheet_name="check",      index=False)
-        summary_df.to_excel(writer,sheet_name="summary",    index=False)
-        review_df.to_excel(writer, sheet_name="ocr_review", index=False)
+        parsed_export_df.to_excel(writer, sheet_name="parsed_stm", index=False)
+        check_export_df.to_excel(writer,  sheet_name="check",      index=False)
+        summary_df.to_excel(writer,      sheet_name="summary",    index=False)
+        review_df.to_excel(writer,       sheet_name="ocr_review", index=False)
 
     buf.seek(0)
     wb = load_workbook(buf)
 
+    # ---------- parsed_stm format ----------
+    if "parsed_stm" in wb.sheetnames:
+        ws = wb["parsed_stm"]
+        headers = {str(cell.value): cell.column for cell in ws[1] if cell.value}
+        header_fill = PatternFill("solid", fgColor="D9EAF7")
+        header_font = Font(color="000000", bold=True)
+        thin = Side(style="thin", color="D9E2F3")
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = Border(bottom=thin)
+        for col in ["debit", "credit", "balance"]:
+            if col in headers:
+                for row in range(2, ws.max_row + 1):
+                    ws.cell(row=row, column=headers[col]).number_format = "#,##0.00"
+        ws.freeze_panes = "A2"
+        for col_idx in range(1, ws.max_column + 1):
+            cl = get_column_letter(col_idx)
+            max_len = max((len(str(c.value or "")) for c in ws[cl]), default=10)
+            ws.column_dimensions[cl].width = min(max(max_len + 2, 12), 35)
+
+    # ---------- check format + Excel formulas แบบโค้ดที่ 1 ----------
     if "check" in wb.sheetnames:
         ws = wb["check"]
         headers = {str(cell.value): cell.column for cell in ws[1] if cell.value}
-        hfill = PatternFill("solid", fgColor="1E3A5F")
-        hfont = Font(color="FFFFFF", bold=True)
-        thin  = Side(style="thin", color="2D3347")
+
+        required = [
+            "debit", "credit", "balance", "prev_balance", "suggested_amount",
+            "expected_balance_excel", "anomaly_reason_excel",
+        ]
+
+        if all(c in headers for c in required):
+            debit_col     = get_column_letter(headers["debit"])
+            credit_col    = get_column_letter(headers["credit"])
+            balance_col   = get_column_letter(headers["balance"])
+            prev_col      = get_column_letter(headers["prev_balance"])
+            suggested_col = get_column_letter(headers["suggested_amount"])
+            expected_col  = get_column_letter(headers["expected_balance_excel"])
+            reason_col    = get_column_letter(headers["anomaly_reason_excel"])
+            tol = BALANCE_TOLERANCE
+
+            for row in range(2, ws.max_row + 1):
+                ws[f"{expected_col}{row}"] = (
+                    f'=IF({prev_col}{row}="","",ROUND({prev_col}{row}'
+                    f'-IF({debit_col}{row}="",0,{debit_col}{row})'
+                    f'+IF({credit_col}{row}="",0,{credit_col}{row}),2))'
+                )
+                ws[f"{reason_col}{row}"] = (
+                    f'=IF({prev_col}{row}="","OPENING_OR_NO_PREV",'
+                    f'IF({balance_col}{row}="","MISSING_BALANCE",'
+                    f'IF({suggested_col}{row}<>"","กระทบยอดให้ตรวจสอบ",'
+                    f'IF(AND({debit_col}{row}="",{credit_col}{row}=""),"MISSING_DEBIT_CREDIT",'
+                    f'IF(ABS({balance_col}{row}-{expected_col}{row})>{tol},"BALANCE_NOT_MATCH","OK")))))'
+                )
+
+        header_fill = PatternFill("solid", fgColor="D9EAF7")
+        header_font = Font(color="000000", bold=True)
+        thin = Side(style="thin", color="D9E2F3")
         for cell in ws[1]:
-            cell.fill = hfill; cell.font = hfont
+            cell.fill = header_fill
+            cell.font = header_font
             cell.alignment = Alignment(horizontal="center", vertical="center")
             cell.border = Border(bottom=thin)
-        num_cols = ["debit","credit","balance","prev_balance","amount","suggested_amount","expected_balance","diff"]
-        for col in num_cols:
+
+        number_cols = [
+            "debit", "credit", "balance", "prev_balance", "suggested_amount",
+            "expected_balance_py", "diff_py", "expected_balance_excel",
+        ]
+        for col in number_cols:
             if col in headers:
-                for row in range(2, ws.max_row+1):
+                for row in range(2, ws.max_row + 1):
                     ws.cell(row=row, column=headers[col]).number_format = "#,##0.00"
+
         ws.freeze_panes = "A2"
-        light_red = PatternFill("solid", fgColor="FCE4E4")
-        dark_font = Font(color="9C0006")
-        if "balance_check" in headers:
-            bc_col = get_column_letter(headers["balance_check"])
+        ws.auto_filter.ref = None
+
+        if ws.max_row >= 2 and "anomaly_reason_excel" in headers:
+            reason_col = get_column_letter(headers["anomaly_reason_excel"])
+            light_red_fill = PatternFill("solid", fgColor="FCE4E4")
+            dark_red_font = Font(color="9C0006")
             ws.conditional_formatting.add(
                 f"A2:{get_column_letter(ws.max_column)}{ws.max_row}",
                 FormulaRule(
-                    formula=[f'=AND(${bc_col}2<>"OK_DEBIT",${bc_col}2<>"OK_CREDIT",${bc_col}2<>"OPENING_BALANCE",${bc_col}2<>"")'],
-                    fill=light_red, font=dark_font
-                )
+                    formula=[f'=AND(${reason_col}2<>"OK",${reason_col}2<>"OPENING_OR_NO_PREV",${reason_col}2<>"")'],
+                    fill=light_red_fill,
+                    font=dark_red_font,
+                ),
             )
-        for col_idx in range(1, ws.max_column+1):
+
+        for col_idx in range(1, ws.max_column + 1):
             cl = get_column_letter(col_idx)
             max_len = max((len(str(c.value or "")) for c in ws[cl]), default=10)
-            ws.column_dimensions[cl].width = min(max(max_len+2, 12), 40)
+            ws.column_dimensions[cl].width = min(max(max_len + 2, 12), 35)
 
     out = io.BytesIO()
     wb.save(out)
@@ -1071,22 +1270,16 @@ def main_app():
         tab1, tab2, tab3 = st.tabs(["parsed_stm", "check", "OCR Review"])
 
         with tab1:
+            # แสดงคอลัมน์แบบโค้ดที่ 1: date / debit / credit / balance
             if parsed_df.empty:
                 st.warning("ไม่พบรายการธุรกรรม")
             else:
-                display_df = parsed_df.copy()
+                display_df = parsed_df[["date", "debit", "credit", "balance"]].copy()
                 for col in ["debit", "credit", "balance"]:
-                    if col in display_df.columns:
-                        display_df[col] = pd.to_numeric(display_df[col], errors="coerce")
-
-                def highlight_row(row):
-                    check = str(row.get("balance_check", ""))
-                    if "REVIEW" in check or ("OK" not in check and check not in ("OPENING_BALANCE", "")):
-                        return ["background-color: rgba(245, 158, 11, 0.12)"] * len(row)
-                    return [""] * len(row)
+                    display_df[col] = pd.to_numeric(display_df[col], errors="coerce")
 
                 st.dataframe(
-                    display_df.style.apply(highlight_row, axis=1).format({
+                    display_df.style.format({
                         "debit":   lambda v: f"{v:,.2f}" if pd.notna(v) else "",
                         "credit":  lambda v: f"{v:,.2f}" if pd.notna(v) else "",
                         "balance": lambda v: f"{v:,.2f}" if pd.notna(v) else "",
@@ -1096,22 +1289,27 @@ def main_app():
                 )
 
         with tab2:
-            if check_df.empty:
+            # แสดง check ตามคอลัมน์ export แบบโค้ดที่ 1
+            check_display_df = prepare_check_export_df(check_df)
+            if check_display_df.empty:
                 st.info("ไม่มีข้อมูล")
             else:
                 show_cols = [
-                    "seq","date","time","debit","credit","balance",
-                    "prev_balance","expected_balance","diff","balance_check","raw_line_text",
+                    "seq", "date", "time", "code", "debit", "credit", "balance",
+                    "prev_balance", "suggested_amount", "suggested_type",
+                    "expected_balance_py", "diff_py", "order_method",
+                    "expected_balance_excel", "anomaly_reason_excel",
                 ]
-                show_cols = [c for c in show_cols if c in check_df.columns]
-                st.dataframe(check_df[show_cols], use_container_width=True, height=520)
+                show_cols = [c for c in show_cols if c in check_display_df.columns]
+                st.dataframe(check_display_df[show_cols], use_container_width=True, height=520)
 
         with tab3:
+            # เก็บ raw_line_text / balance_check ไว้ตรวจ OCR ตามเดิม
             if review_df.empty:
                 st.success("ไม่มีรายการที่ต้องตรวจสอบ")
             else:
                 st.warning(f"พบ {len(review_df):,} รายการที่ต้องตรวจสอบ")
-                show_cols = ["seq","date","debit","credit","balance","balance_check","raw_line_text"]
+                show_cols = ["seq", "date", "debit", "credit", "balance", "balance_check", "raw_line_text"]
                 show_cols = [c for c in show_cols if c in review_df.columns]
                 st.dataframe(review_df[show_cols], use_container_width=True, height=420)
 
